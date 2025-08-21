@@ -1,46 +1,81 @@
 import 'package:flutter/foundation.dart';
+import 'package:my_app/features/settings/settings_store.dart';
 
-
-/// API endpoints
+/// ------- API endpoints -------
 const String kLivenessApiUrl = 'https://54.251.132.76:5000/api/liveness';
 const String kFaceRecognitionApiUrl =
     'https://workbench.ressystem.com/api/hr/faceRecognition';
 
-
-/// Face fit thresholds
+/// ------- Face fit thresholds -------
 const double kMinFaceRatio = 0.06;
 const double kFitRelaxFactor = 1.30;
 
+/// ------- Ellipse window (screen %) -------
+// const double kOvalRxPct = 0.36;
+// const double kOvalRyPct = 0.24;
+const double kDefaultOvalRxPct = 0.36;
+const double kDefaultOvalRyPct = 0.24;
+/// Getters dynamic (لو تم حفظ قيم جديدة في SettingsStore → تُستخدم، وإلا fallback على الافتراضي)
+double get kOvalRxPct {
+  try {
+    return SettingsStore.I.value.ovalRxPct;
+  } catch (_) {
+    return kDefaultOvalRxPct;
+  }
+}
 
-/// Ellipse (real) window parameters (as screen percentages)
-const double kOvalRxPct = 0.36;
-const double kOvalRyPct = 0.24;
+double get kOvalRyPct {
+  try {
+    return SettingsStore.I.value.ovalRyPct;
+  } catch (_) {
+    return kDefaultOvalRyPct;
+  }
+}
+
 const double kOvalCxOffsetPct = 0.00;
 const double kOvalCyOffsetPct = -0.03;
 
+/// ------- Inside tolerance -------
+const double kOvalInsideEpsilon = 0.95; // was 0.20 (too strict)
 
-/// Inside tolerance (multiplies radii). Use ~0.95..1.0 for reasonable acceptance
-const double kOvalInsideEpsilon = 0.95; // <-- was 0.20 (too strict)
+/// ------- Timings (dynamic via SettingsStore) -------
+/// استخدم getters آمنة بدل ثوابت/متغيرات أعلى الملف.
+/// لو SettingsStore لم يتهيّأ بعد → رجّع fallback (5 و 300).
+int get kCountdownSeconds {
+  try {
+    return SettingsStore.I.value.countdownSeconds;
+  } catch (_) {
+    return 5;
+  }
+}
 
+int get kScreensaverSeconds {
+  try {
+    return SettingsStore.I.value.screensaverSeconds;
+  } catch (_) {
+    return 300;
+  }
+}
 
-/// Timings
-const int kCountdownSeconds = 5;
 const int kDisplayImageMs = 15000;
-const int kScreensaverSeconds = 300;
 const int kClockDwellMs = 30000;
 const int kBrightnessSampleEveryN = 3;
 
-
-/// Performance knobs
+/// ------- Performance -------
 const int kDetectEveryN = 4;
 
-
-/// Whether to allow insecure HTTPS (debug only)
+/// ------- HTTPS (debug only) -------
 bool get kAllowInsecureHttps => !kReleaseMode;
 
-
-// ===== Feature flags =====
-const bool kEnableLiveness          = bool.fromEnvironment('ENABLE_LIVENESS', defaultValue: true);
-const bool kEnableFaceRecognition   = bool.fromEnvironment('ENABLE_FACE_RECOGNITION', defaultValue: false);
-// (اختياري) لو حبيت توقف كشف الوجوه (ML Kit) نهائياً:
+/// ------- Feature flags -------
+const bool kEnableLiveness        = bool.fromEnvironment('ENABLE_LIVENESS', defaultValue: true);
+// const bool kEnableFaceRecognition = bool.fromEnvironment('ENABLE_FACE_RECOGNITION', defaultValue: false);
 const bool kEnableOnDeviceDetection = bool.fromEnvironment('ENABLE_ONDEVICE_DETECTION', defaultValue: true);
+bool get kEnableFaceRecognition {
+  try {
+    return SettingsStore.I.value.enableFaceRecognition;
+  } catch (_) {
+    return false; // fallback
+  }
+}
+

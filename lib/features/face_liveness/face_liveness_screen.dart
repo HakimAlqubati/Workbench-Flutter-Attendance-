@@ -273,7 +273,7 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
             child: ElevatedButton.icon(
               icon: const Icon(Icons.arrow_forward_rounded),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xff0d7c66),
+                backgroundColor: Theme.of(context).primaryColor,
                 foregroundColor: Colors.white,
                 shadowColor: Colors.black54,
                 elevation: 8,
@@ -319,7 +319,21 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
                     ],
                   ),
                 ),
-
+              Glass(
+                blur: 10,
+                opacity: 0.14,
+                border: true,
+                radius: 999,
+                padding: const EdgeInsets.all(6),
+                child: IconButton(
+                  tooltip: 'Settings',
+                  onPressed: () {
+                    c.userActivity();                // يمنع دخول السكرين سيفر
+                    Navigator.pushNamed(context, '/settings');
+                  },
+                  icon: const Icon(Icons.settings_outlined, size: 18, color: Colors.white),
+                ),
+              ),
 
 
             ],
