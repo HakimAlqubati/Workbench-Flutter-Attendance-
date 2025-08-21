@@ -319,21 +319,21 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
                     ],
                   ),
                 ),
-              Glass(
-                blur: 10,
-                opacity: 0.14,
-                border: true,
-                radius: 999,
-                padding: const EdgeInsets.all(6),
-                child: IconButton(
-                  tooltip: 'Settings',
-                  onPressed: () {
-                    c.userActivity();                // يمنع دخول السكرين سيفر
-                    Navigator.pushNamed(context, '/settings');
-                  },
-                  icon: const Icon(Icons.settings_outlined, size: 18, color: Colors.white),
-                ),
-              ),
+              // Glass(
+              //   blur: 10,
+              //   opacity: 0.14,
+              //   border: true,
+              //   radius: 999,
+              //   padding: const EdgeInsets.all(6),
+              //   child: IconButton(
+              //     tooltip: 'Settings',
+              //     onPressed: () {
+              //       c.userActivity();                // يمنع دخول السكرين سيفر
+              //       Navigator.pushNamed(context, '/settings');
+              //     },
+              //     icon: const Icon(Icons.settings_outlined, size: 18, color: Colors.white),
+              //   ),
+              // ),
 
 
             ],

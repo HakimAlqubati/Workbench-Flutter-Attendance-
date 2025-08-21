@@ -65,7 +65,8 @@ const int kBrightnessSampleEveryN = 3;
 const int kDetectEveryN = 4;
 
 /// ------- HTTPS (debug only) -------
-bool get kAllowInsecureHttps => !kReleaseMode;
+// bool get kAllowInsecureHttps => !kReleaseMode;
+const bool kAllowInsecureHttps = true;
 
 /// ------- Feature flags -------
 const bool kEnableLiveness        = bool.fromEnvironment('ENABLE_LIVENESS', defaultValue: true);
