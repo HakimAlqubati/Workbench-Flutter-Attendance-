@@ -57,6 +57,20 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
   Offset? _centerOffsetPx;
   Offset? get centerOffsetPx => _centerOffsetPx;
 
+  bool _captureEligible = false;
+  bool get captureEligible => _captureEligible;
+
+  void _setCaptureEligible(bool v) {
+    if (_captureEligible == v) return;
+    _captureEligible = v;
+    notifyListeners();
+  }
+
+  // حجم الوجه الخام raw = faceShort/imgShort (بدون clamp للأعلى)
+  static const double kRawFaceMin   = 0.32; // أبعد من هذا: اعتبره بعيد (≈ >25–30 سم)
+  static const double kRawFaceIdeal = 0.98; // هذا “القمة” ≈ 20 سم
+  static const double kRawFaceMax   = 0.99; // أقرب من هذا: اعتبره قريب جدًا (≤ ~15 سم)
+
   /// تحديث داخلي
   set _setRatioProgress(double v) {
     _ratioProgress = v.clamp(0.0, 1.0);
@@ -338,7 +352,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     _detectCounter = 0;
     _lastFaceRect = null;
     _insideOval = false;
-
+    _setCaptureEligible(false);
     await _initCamera();
     _resetInactivity();
     notifyListeners();
@@ -404,7 +418,6 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
       final luma = _estimateLuma(image); // 0..255
       _brightnessLevel = luma;
       _brightnessStatus = _statusForLuma(luma);
-      debugPrint('LUMA=${_brightnessLevel?.toStringAsFixed(1)} | ${_brightnessStatus}');
       notifyListeners(); // مهم لإظهار شريحة الإضاءة فورًا
     }
 
@@ -457,8 +470,11 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
           isFront: isFront,
         );
 
-        // 3) عوامل التقدّم: الحجم (0..1) والتمركز (0..1)
-        final double sizeFactor = _sizeScore(rect, Size(rawW, rawH)); // 0..1
+
+        final imgShort = math.min(rawW, rawH);
+        final faceShort = math.min(rect.width, rect.height);
+        final double sizeRaw = (imgShort == 0 ? 0.0 : faceShort / imgShort); // بدون clamp للأعلى
+        final double sizeFactor = _sizeScoreWindowed(sizeRaw);
         final double posFactor = _positionFactor(
           faceCenterRaw: rect.center,
           imageRawSize: Size(rawW, rawH),
@@ -481,12 +497,19 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
         // 5) تحديث حالة "وجه مُكتشف" (يمكن ضبط العتبة بحسب تجربتك)
         _updateFaceDetected(sizeFactor >= (kMinFaceRatio * 0.6));
 
-        // 6) التحكّم بالعدّاد (Countdown) بناء على الشروط
-        if (_faceDetected && _insideOval /*&& _ratioProgress >= 0.99*/) {
+        final bool eligible = _faceDetected
+            && _insideOval
+            && sizeRaw >= kRawFaceMin
+            && sizeRaw <= kRawFaceMax;
+
+        _setCaptureEligible(eligible);
+
+        if (eligible) {
           _beginCountdown();
         } else {
           _stopCountdown();
         }
+
       } else {
         // لا توجد وجوه: هبوط سريع للشريط وإيقاف العدّاد
         _lastFaceRect = null;
@@ -826,6 +849,24 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     // الهدف الذي نعتبره ممتاز للالتقاط (اضبط target حسب تصميمك)
     return (raw / target).clamp(0.0, 1.0);
   }
+
+  double _smoothstep(double a, double b, double x) {
+    if (a == b) return x >= b ? 1.0 : 0.0;
+    final t = ((x - a) / (b - a)).clamp(0.0, 1.0);
+    return t * t * (3 - 2 * t); // منحنى S ناعم
+  }
+
+  /// تُرجِع 0..1 مع قمة عند kRawFaceIdeal وهبوط سلس إلى 0 عند الطرفين
+  double _sizeScoreWindowed(double raw) {
+    // صعود من kRawFaceMin إلى الكمال عند kRawFaceIdeal
+    final up = _smoothstep(kRawFaceMin, kRawFaceIdeal, raw);
+    // نزول من الكمال عند kRawFaceIdeal إلى 0 عند kRawFaceMax
+    final down = 1.0 - _smoothstep(kRawFaceIdeal, kRawFaceMax, raw);
+    // الدمج يعطي قمة محدة ونطاق ديناميكي ممتاز
+    final peak = math.min(up, down);
+    return peak.clamp(0.0, 1.0);
+  }
+
 
   /// يحسب عامل التمركز 0..1 داخل البيضاوي.
   /// 1 في المركز، يقل تدريجياً نحو الحواف، 0 إذا خرج (distance>=1).

@@ -15,6 +15,7 @@ const _kDefaultScreensaverSeconds = 59;
 const _kDefaultOvalRxPct = kDefaultOvalRxPct;
 const _kDefaultOvalRyPct = kDefaultOvalRyPct;
 const _kDefaultEnableFaceRecognition = false;
+
 /// موديل الإعدادات
 class AppSettings {
   final int countdownSeconds;
@@ -22,13 +23,14 @@ class AppSettings {
   final double ovalRxPct;
   final double ovalRyPct;
   final bool enableFaceRecognition;
-
+  final String baseUrl;
   const AppSettings({
     required this.countdownSeconds,
     required this.screensaverSeconds,
     required this.ovalRxPct,
     required this.ovalRyPct,
     required this.enableFaceRecognition,
+    required this.baseUrl
   });
 
   AppSettings copyWith({
@@ -37,6 +39,7 @@ class AppSettings {
     double? ovalRxPct,
     double? ovalRyPct,
     bool? enableFaceRecognition,
+    String? baseUrl,
   }) {
     return AppSettings(
       countdownSeconds: countdownSeconds ?? this.countdownSeconds,
@@ -44,7 +47,7 @@ class AppSettings {
       ovalRxPct: ovalRxPct ?? this.ovalRxPct,
       ovalRyPct: ovalRyPct ?? this.ovalRyPct,
       enableFaceRecognition: enableFaceRecognition ?? this.enableFaceRecognition,
-
+      baseUrl: baseUrl ?? this.baseUrl,
     );
   }
 }
@@ -61,6 +64,7 @@ class SettingsStore {
       ovalRxPct: _kDefaultOvalRxPct,
       ovalRyPct: _kDefaultOvalRyPct,
       enableFaceRecognition: _kDefaultEnableFaceRecognition,
+        baseUrl: 'https://54.251.132.76:5000'
     ),
   );
 
@@ -68,6 +72,8 @@ class SettingsStore {
 
   Future<void> init() async {
     _prefs ??= await SharedPreferences.getInstance();
+    final base = _prefs?.getString('baseUrl') ?? 'https://54.251.132.76:5000';
+
 
     final countdown = _prefs!.getInt(_kKeyCountdownSeconds) ?? _kDefaultCountdownSeconds;
     final saver     = _prefs!.getInt(_kKeyScreensaverSeconds) ?? _kDefaultScreensaverSeconds;
@@ -81,7 +87,7 @@ class SettingsStore {
       ovalRxPct: rx,
       ovalRyPct: ry,
       enableFaceRecognition: faceRec,
-
+      baseUrl: base,
     );
   }
 
@@ -111,4 +117,14 @@ class SettingsStore {
     await _prefs?.setDouble(_kKeyOvalRyPct, ry);
     notifier.value = notifier.value.copyWith(ovalRyPct: ry);
   }
+
+
+  String baseUrl = 'https://54.251.132.76:5000';
+
+  Future<void> setBaseUrl(String url) async {
+    baseUrl = url;
+    await _prefs?.setString('baseUrl', url);
+    notifier.value = notifier.value.copyWith(baseUrl: url);
+  }
+
 }

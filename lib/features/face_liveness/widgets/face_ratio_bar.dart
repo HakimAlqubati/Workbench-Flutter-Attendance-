@@ -9,12 +9,14 @@ class FaceRatioBar extends StatelessWidget {
   final double progress; // 0..1
   final String brightnessText;
   final double? brightnessValue;
-
+  final bool showProgressBar;
   const FaceRatioBar({
     super.key,
     required this.progress,
     required this.brightnessText,
     required this.brightnessValue,
+    this.showProgressBar = false, // افتراضي يظهر
+
   });
 
   // دالة مساعدة لتحديد الحالة بناءً على النص
@@ -50,6 +52,7 @@ class FaceRatioBar extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if(showProgressBar)...[
                 // العنوان ونسبة Face fit
                 Row(
                   children: [
@@ -82,6 +85,8 @@ class FaceRatioBar extends StatelessWidget {
                     ),
                   ],
                 ),
+
+
                 const SizedBox(height: 8),
 
                 // شريط Face fit أصبح متحركاً
@@ -114,7 +119,7 @@ class FaceRatioBar extends StatelessWidget {
                     ),
                   );
                 }),
-
+                ],
                 const SizedBox(height: 8),
 
                 // سطر الإضاءة
@@ -161,7 +166,7 @@ class _EnhancedBrightnessChip extends StatelessWidget {
         break;
       case BrightnessStatus.initializing:
         color = Colors.grey.shade600; // رمادي
-        iconData = Icons.highlight_alt_rounded;
+        iconData = Icons.hourglass_empty;
         break;
     }
 

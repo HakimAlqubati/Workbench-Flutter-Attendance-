@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
-import 'package:my_app/theme/app_theme.dart'; // ← هنا
 
+import 'package:my_app/theme/app_theme.dart'; // يستخدم الثيم الذي أرسلته
 
 import 'features/auth/login_screen.dart';
 import 'features/face_liveness/face_liveness_screen.dart';
@@ -12,16 +12,32 @@ import 'features/face_liveness/services/auth_service.dart';
 import 'features/settings/settings_store.dart';
 import 'features/settings/settings_screen.dart';
 
+/// ========== علامة مائية عامة ==========
+class AppWatermark extends StatelessWidget {
+  const AppWatermark({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Center(
+        child: Opacity(
+          opacity: 0.06, // خفيفة وغير مزعجة
+          child: Image.network(
+            'https://nltworkbench.com/storage/logo/default-wb.png',
+            width: 280,
+            fit: BoxFit.contain,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ثبّت الوضع الطولي
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-
-  // منع قفل الشاشة أثناء التشغيل
   await WakelockPlus.enable();
-
-  // تهيئة مخزن الإعدادات قبل تشغيل التطبيق
   await SettingsStore.I.init();
 
   runApp(const MyApp());
@@ -29,28 +45,25 @@ Future<void> main() async {
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Face Liveness',
-      theme:appTheme,
-      // ملاحظة: وجود home يجعل initialRoute غير فعّال؛ نُبقي home فقط.
+      theme: appTheme, // ✅ التزام كامل بثيمك
       home: const SplashGate(),
       routes: {
         '/face-liveness': (_) => const FaceLivenessScreen(),
         '/login': (_) => const LoginScreen(),
-        '/settings': (_) => const SettingsScreen(), // شاشة الإعدادات
+        '/settings': (_) => const SettingsScreen(),
       },
     );
   }
 }
 
-/// شاشة بسيطة تتحقق من وجود توكن وتحدد الوجهة
+/// شاشة انتقالية تتحقق من الجلسة
 class SplashGate extends StatefulWidget {
   const SplashGate({super.key});
-
   @override
   State<SplashGate> createState() => _SplashGateState();
 }
@@ -65,25 +78,29 @@ class _SplashGateState extends State<SplashGate> {
   }
 
   Future<void> _go() async {
-    // (SettingsStore.I.init() تم استدعاؤه في main)
     final session = await _auth.getSavedSession();
     if (!mounted) return;
 
     if (session != null && session.token.isNotEmpty) {
-      // عنده توكن محفوظ → ادخله مباشرة للصفحة الرئيسية
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const HomeScreen()),
       );
     } else {
-      // لا يوجد توكن → اعرض شاشة الدخول
       Navigator.of(context).pushReplacementNamed('/login');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(child: CircularProgressIndicator()),
+    // مؤشر تحميل بسيط — لا ألوان خارج الثيم
+    return Scaffold(
+      body: Stack(
+        fit: StackFit.expand,
+        children: const [
+          AppWatermark(), // ← العلامة المائية بالخلف
+          Center(child: CircularProgressIndicator()),
+        ],
+      ),
     );
   }
 }
@@ -102,7 +119,7 @@ class HomeScreen extends StatelessWidget {
     Navigator.pushNamed(context, '/settings');
   }
 
-  void _logout(BuildContext context) async {
+  Future<void> _logout(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -124,13 +141,11 @@ class HomeScreen extends StatelessWidget {
     if (confirmed != true) return;
 
     final auth = AuthService();
-    await auth.logout(); // حذف التوكن أو بيانات الجلسة
+    await auth.logout();
 
     if (!context.mounted) return;
 
-    // الرجوع إلى شاشة الدخول
     Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
-
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('You have been logged out')),
     );
@@ -138,35 +153,98 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Face Liveness"),
+        // ✅ يعتمد على appBarTheme في ثيمك
         centerTitle: true,
-        actions: [
-          IconButton(
-            tooltip: 'Settings',
-            onPressed: () => _openSettings(context),
-            icon: const Icon(Icons.settings_outlined),
-          ),
-          IconButton(
-            tooltip: 'Logout',
-            onPressed: () => _logout(context),
-            icon: const Icon(Icons.logout),
+      ),
+      body: Stack(
+        children: [
+          // ← العلامة المائية بالخلف
+          const AppWatermark(),
+
+          // محتوى الشاشة فوق العلامة
+          SafeArea(
+            minimum: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+
+                const SizedBox(height: 16),
+
+                // أزرار كبيرة باستخدام ElevatedButtonTheme من ثيمك
+                Expanded(
+                  child: GridView.count(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    children: [
+                      _BigActionButton(
+                        icon: Icons.camera_alt_outlined,
+                        title: 'Start Camera',
+                        onPressed: () => _openCamera(context),
+                      ),
+                      _BigActionButton(
+                        icon: Icons.settings_suggest_rounded,
+                        title: 'Settings',
+                        onPressed: () => _openSettings(context),
+                      ),
+                    ],
+                  ),
+                ),
+
+                TextButton.icon(
+                  onPressed: () => _logout(context),
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Logout'),
+                ),
+              ],
+            ),
           ),
         ],
       ),
-      body: Center(
-        child: ElevatedButton(
-          onPressed: () => _openCamera(context),
-          style: ElevatedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-            backgroundColor: Colors.teal,
-            foregroundColor: Colors.white,
-            textStyle: const TextStyle(fontWeight: FontWeight.bold),
+    );
+  }
+}
+
+class _BigActionButton extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final VoidCallback onPressed;
+
+  const _BigActionButton({
+    required this.icon,
+    required this.title,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return ElevatedButton(
+      onPressed: onPressed,
+      style: ElevatedButton.styleFrom(
+        padding: const EdgeInsets.all(10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // لا تثبّت اللون حتى يأخذه من الثيم/الزر تلقائيًا
+          Icon(icon, size: 36),
+          // لو تبغى لونًا ثابتًا عالي التباين، استخدم التالي بدل السطر أعلاه:
+          // Icon(icon, size: 36, color: cs.onPrimary),
+
+          const SizedBox(height: 10),
+          Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
           ),
-          child: const Text("Open Camera", style: TextStyle(fontSize: 18)),
-        ),
+        ],
       ),
     );
   }

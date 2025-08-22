@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:my_app/features/settings/settings_store.dart';
 
 /// ------- API endpoints -------
-const String kLivenessApiUrl = 'https://54.251.132.76:5000/api/liveness';
+
 const String kFaceRecognitionApiUrl =
     'https://workbench.ressystem.com/api/hr/faceRecognition';
 
@@ -13,8 +13,8 @@ const double kFitRelaxFactor = 1.30;
 /// ------- Ellipse window (screen %) -------
 // const double kOvalRxPct = 0.36;
 // const double kOvalRyPct = 0.24;
-const double kDefaultOvalRxPct = 0.36;
-const double kDefaultOvalRyPct = 0.24;
+const double kDefaultOvalRxPct = 0.42;
+const double kDefaultOvalRyPct = 0.27;
 /// Getters dynamic (لو تم حفظ قيم جديدة في SettingsStore → تُستخدم، وإلا fallback على الافتراضي)
 double get kOvalRxPct {
   try {
@@ -83,3 +83,12 @@ bool get kEnableFaceRecognition {
 
 // مدى تقبّل الانحراف عن مركز البيضاوي كنسبة من نصف القطر (0..1)
 const double kCenterEpsilonPct = 0.18; // جرّب 0.15..0.22 حسب ذوقك
+
+String get kLivenessApiUrl {
+  try {
+    final base = SettingsStore.I.value.baseUrl;
+    return '$base/api/liveness';
+  } catch (_) {
+    return 'https://54.251.132.76:5000/api/liveness';
+  }
+}

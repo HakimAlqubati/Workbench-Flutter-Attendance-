@@ -128,6 +128,14 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
         ? CameraPreviewCover(controller: cam)
         : const ColoredBox(color: Colors.black);
 
+
+    // حدد لون البيضاوي بناءً على نفس شروط العدّاد:
+    // خارج البيضاوي -> لون خافت/أبيض، داخل لكن غير مؤهل -> برتقالي تحذيري، مؤهل -> أخضر.
+    final Color ovalActiveColor = c.captureEligible
+        ? const Color(0xff0fd86e)          // ✅ جاهز للالتقاط (نفس شرط العدّاد)
+        : const Color(0xffffb74d);          // ⚠️ داخل الإطار لكن غير مؤهل بعد (حجم/وضع)
+
+
     return Stack(
       children: [
         Positioned.fill(child: basePreview),
@@ -150,22 +158,21 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
             ),
           ),
 
+
         if (c.cameraOpen && c.capturedFile == null)
-
-
-    Positioned.fill(
+          Positioned.fill(
             child: IgnorePointer(
               child: CustomPaint(
                 painter: FrameMaskPainter(
                   inside: c.insideOval,
-                  activeColor: Theme.of(context).primaryColor,                 // ✅ من الثيم
-                  inactiveColor: Colors.white,                     // أو theme.colorScheme.outline.withOpacity(.9)
-                  glow: (math.sin(glowCtrl.value * 2 * math.pi) + 1) / 2, // لو حابب توهّج لطيف 0..1
+                  activeColor: ovalActiveColor,                         // ✅ اللون النشط المرتبط بالشروط
+                  inactiveColor: Colors.white.withOpacity(0.92),        // لون خافت خارج البيضاوي
+                  glow: (math.sin(glowCtrl.value * 2 * math.pi) + 1) / 2, // توهج 0..1
                   strokeWidth: 2.0,
                 ),
                 foregroundPainter: FrameGlowPainter(
                   glowCtrl,
-                  inside: c.insideOval,
+                  inside: c.captureEligible, // ✅ اجعل التوهج “جاهز” فقط عند توافر الشروط
                 ),
               ),
             ),
@@ -186,7 +193,8 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
             ),
           ),
 
-        if (c.cameraOpen && c.countdown != null)
+        // ✅ لو مؤهل → عداد
+        if (c.cameraOpen && c.countdown != null && c.captureEligible)
           Positioned(
             bottom: MediaQuery.of(context).size.height * 0.18,
             left: 0,
@@ -221,6 +229,32 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
                 },
               ),
             ),
+          )
+
+// ⚠️ لو غير مؤهل (لون أصفر) → رسالة قصيرة
+        else if (c.cameraOpen && !c.captureEligible && c.insideOval)
+          Positioned(
+            bottom: MediaQuery.of(context).size.height * 0.18,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Text(
+                "Move In",   // ✅ نص قصير بالإنجليزية
+                style: TextStyle(
+                  fontSize: MediaQuery.of(context).size.width * 0.08,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.amberAccent,
+                  decoration: TextDecoration.none,
+                  shadows: const [
+                    Shadow(
+                      color: Colors.black54,
+                      blurRadius: 8,
+                      offset: Offset(0, 3),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
 
         if (c.cameraOpen && c.capturedFile == null)
@@ -230,23 +264,6 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
             brightnessValue: c.brightnessLevel,
           ),
 
-        // ⬇️ مؤشر محاذاة الوجه لمركز البيضاوي
-        // if (c.cameraOpen && c.capturedFile == null  && c.insideOval )
-        //   Positioned(
-        //     top: MediaQuery.of(context).size.height * 0.12 + 100,
-        //     left: 16,
-        //     right: 16,
-        //     child: Center(
-        //       child: Opacity(
-        //         opacity: c.centerScore, // 0..1
-        //         child: const Icon(
-        //           Icons.fiber_manual_record,
-        //           size: 14,
-        //           color: Color(0xff0fd86e),
-        //         ),
-        //       ),
-        //     ),
-        //   ),
 
         if (c.livenessResult != null)
           _buildLivenessBanner(context, c.livenessResult!),

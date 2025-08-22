@@ -15,63 +15,53 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController _countdownCtrl;
   late final TextEditingController _screensaverCtrl;
-  late final TextEditingController _ovalRxCtrl;
-  late final TextEditingController _ovalRyCtrl;
+  late final TextEditingController _baseUrlCtrl;
+
+  double ovalRx = kDefaultOvalRxPct;
+  double ovalRy = kDefaultOvalRyPct;
 
   @override
   void initState() {
     super.initState();
     final s = SettingsStore.I.value;
+    _baseUrlCtrl = TextEditingController(text: SettingsStore.I.value.baseUrl);
     _countdownCtrl = TextEditingController(text: s.countdownSeconds.toString());
     _screensaverCtrl = TextEditingController(text: s.screensaverSeconds.toString());
-    _ovalRxCtrl = TextEditingController(text: s.ovalRxPct.toStringAsFixed(2));
-    _ovalRyCtrl = TextEditingController(text: s.ovalRyPct.toStringAsFixed(2));
+    ovalRx = s.ovalRxPct;
+    ovalRy = s.ovalRyPct;
   }
 
   @override
   void dispose() {
     _countdownCtrl.dispose();
     _screensaverCtrl.dispose();
-    _ovalRxCtrl.dispose();
-    _ovalRyCtrl.dispose();
+    _baseUrlCtrl.dispose();
     super.dispose();
   }
 
-
+  void _adjustOvalValue(bool isRx, double delta) {
+    setState(() {
+      double current = isRx ? ovalRx : ovalRy;
+      double updated = (current + delta).clamp(0.1, 0.5);
+      if (isRx) {
+        ovalRx = double.parse(updated.toStringAsFixed(2));
+      } else {
+        ovalRy = double.parse(updated.toStringAsFixed(2));
+      }
+    });
+  }
 
   Future<void> _save() async {
     final cd = int.tryParse(_countdownCtrl.text.trim()) ?? 5;
-    final sv = (int.tryParse(_screensaverCtrl.text.trim()) ?? 59).clamp(15, 59).toInt();
-
-    double? _validateOrFallback(String text, double fallback) {
-      if (text.trim().isEmpty) return fallback;
-
-      final v = double.tryParse(text.trim());
-      if (v == null || v < 0.1 || v > 0.5) return null;
-      return double.parse(v.toStringAsFixed(2));
-    }
-
-    final rx = _validateOrFallback(_ovalRxCtrl.text, kDefaultOvalRxPct);
-    final ry = _validateOrFallback(_ovalRyCtrl.text, kDefaultOvalRyPct);
-
-    if (rx == null || ry == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('⚠️ Oval Rx and Ry must be between 0.1 and 0.5 if provided.'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-      return;
-    }
-
-    // تحديث الحقول بالنص النهائي
-    _ovalRxCtrl.text = rx.toStringAsFixed(2);
-    _ovalRyCtrl.text = ry.toStringAsFixed(2);
+    final sv = (int.tryParse(_screensaverCtrl.text.trim()) ?? 30).clamp(15, 30).toInt();
 
     await SettingsStore.I.setCountdownSeconds(cd);
     await SettingsStore.I.setScreensaverSeconds(sv);
-    await SettingsStore.I.setOvalRxPct(rx);
-    await SettingsStore.I.setOvalRyPct(ry);
+    await SettingsStore.I.setOvalRxPct(ovalRx);
+    await SettingsStore.I.setOvalRyPct(ovalRy);
+
+    final base = _baseUrlCtrl.text.trim();
+    await SettingsStore.I.setBaseUrl(base);
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -80,7 +70,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     Navigator.pushNamed(context, '/face-liveness');
   }
-
 
   Widget _numberField({
     required String label,
@@ -118,6 +107,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   labelStyle: const TextStyle(color: Colors.white70),
                 ),
                 style: const TextStyle(color: Colors.white),
+                textAlign: TextAlign.center,
                 cursorColor: primaryColor,
               ),
             ),
@@ -126,6 +116,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 suffix,
                 style: const TextStyle(color: Colors.white70),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _adjustableField({
+    required String label,
+    required double value,
+    required double defaultValue,
+    required VoidCallback onIncrement,
+    required VoidCallback onDecrement,
+  }) {
+    return Card(
+      elevation: 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: primaryColor.withOpacity(0.4)),
+      ),
+      color: Colors.white.withOpacity(0.06),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$label: ${value.toStringAsFixed(2)}',
+                    style: const TextStyle(color: Colors.white70),
+                  ),
+                  Text(
+                    'Default: ${defaultValue.toStringAsFixed(2)}',
+                    style: const TextStyle(color: Colors.white38, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.remove_circle_outline),
+              color: Colors.white70,
+              onPressed: onDecrement,
+            ),
+            IconButton(
+              icon: const Icon(Icons.add_circle_outline),
+              color: Colors.white70,
+              onPressed: onIncrement,
+            ),
           ],
         ),
       ),
@@ -154,43 +193,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
         padding: const EdgeInsets.all(16),
         child: ListView(
           children: [
-            _numberField(
-              label: 'Countdown (seconds)',
-              controller: _countdownCtrl,
-              suffix: 'sec',
-              hint: '5',
-              decimal: false,
+            Row(
+              children: [
+                Expanded(
+                  child: _numberField(
+                    label: 'Countdown',
+                    controller: _countdownCtrl,
+                    // suffix: 'sec',
+                    hint: 'Default: 5',
+                    decimal: false,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _numberField(
+                    label: 'Screensaver',
+                    controller: _screensaverCtrl,
+                    // suffix: 'sec',
+                    hint: 'Default: 59 (min: 15)',
+                    decimal: false,
+                  ),
+                ),
+              ],
             ),
+
             const SizedBox(height: 12),
-            _numberField(
-              label: 'Screensaver (seconds)',
-              controller: _screensaverCtrl,
-              suffix: 'sec',
-              hint: '59',
-              decimal: false,
-              // formatters: [
-              //   RangeTextInputFormatter(min: 15, max: 59), // ✅ أضف هذا السطر
-              // ],
-            ),
-            const SizedBox(height: 12),
-            _numberField(
+            _adjustableField(
               label: 'Oval Width (Rx)',
-              controller: _ovalRxCtrl,
-              hint: kDefaultOvalRxPct.toString(),
-              decimal: true,
-              // formatters: [
-              //   RangeTextInputFormatter(min: 0.1, max: 1.0),
-              // ],
+              value: ovalRx,
+              defaultValue: kDefaultOvalRxPct,
+              onIncrement: () => _adjustOvalValue(true, 0.01),
+              onDecrement: () => _adjustOvalValue(true, -0.01),
             ),
             const SizedBox(height: 12),
-            _numberField(
+            _adjustableField(
               label: 'Oval Height (Ry)',
-              controller: _ovalRyCtrl,
-              hint: kDefaultOvalRyPct.toString(),
-              decimal: true,
-              // formatters: [
-              //   RangeTextInputFormatter(min: 0.1, max: 1.0),
-              // ],
+              value: ovalRy,
+              defaultValue: kDefaultOvalRyPct,
+              onIncrement: () => _adjustOvalValue(false, 0.01),
+              onDecrement: () => _adjustOvalValue(false, -0.01),
             ),
             const SizedBox(height: 16),
             SwitchListTile(
@@ -202,6 +243,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 await SettingsStore.I.setEnableFaceRecognition(v);
                 if (mounted) setState(() {});
               },
+            ),
+            _numberField(
+              label: 'Server Base URL',
+              controller: _baseUrlCtrl,
+              hint: 'Default: https://54.251.132.76:5000',
+              decimal: false,
             ),
             const SizedBox(height: 12),
             ElevatedButton.icon(
@@ -215,6 +262,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
             ),
+
+            const SizedBox(height: 12),
           ],
         ),
       ),
