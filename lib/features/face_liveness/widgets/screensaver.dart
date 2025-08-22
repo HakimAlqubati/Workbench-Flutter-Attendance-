@@ -39,23 +39,32 @@ class Screensaver extends StatelessWidget {
                 child: Container(
                   margin: const EdgeInsets.only(top: 18),
                   padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(.08),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: Colors.white.withOpacity(.18)),
-                    boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 36, offset: Offset(0, 12))],
-                  ),
+                  // decoration: BoxDecoration(
+                  //   color: Colors.white.withOpacity(.08),
+                  //   borderRadius: BorderRadius.circular(18),
+                  //   border: Border.all(color: Colors.white.withOpacity(.18)),
+                  //   boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 36, offset: Offset(0, 12))],
+                  // ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(timeStr,
                           style: const TextStyle(
                               color: Colors.white,
+                              decoration: TextDecoration.none,
                               fontWeight: FontWeight.w900,
                               fontSize: 56,
                               shadows: [Shadow(color: Colors.black87, blurRadius: 16, offset: Offset(0, 3))])),
                       const SizedBox(height: 6),
-                      Text(dateStr, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 18)),
+                      Text(
+                        dateStr,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 18,
+                          decoration: TextDecoration.none, // 👈 هنا أيضًا
+                        ),
+                      ),
                     ],
                   ),
                 ),

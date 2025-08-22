@@ -167,13 +167,13 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
           Positioned.fill(
             child: IgnorePointer(
               child: CustomPaint(
-                painter: FaceBoxPainter(
-                  faceRect: c.lastFaceRect,
-                  imageRawSize: c.latestImageSize,
-                  isFrontCamera:
-                      c.controller?.description.lensDirection ==
-                      CameraLensDirection.front,
-                ),
+                // painter: FaceBoxPainter(
+                //   faceRect: c.lastFaceRect,
+                //   imageRawSize: c.latestImageSize,
+                //   isFrontCamera:
+                //       c.controller?.description.lensDirection ==
+                //       CameraLensDirection.front,
+                // ),
               ),
             ),
           ),
@@ -219,6 +219,24 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
             brightnessText: _brightnessLabel,
             brightnessValue: c.brightnessLevel,
           ),
+
+        // ⬇️ مؤشر محاذاة الوجه لمركز البيضاوي
+        // if (c.cameraOpen && c.capturedFile == null  && c.insideOval )
+        //   Positioned(
+        //     top: MediaQuery.of(context).size.height * 0.12 + 100,
+        //     left: 16,
+        //     right: 16,
+        //     child: Center(
+        //       child: Opacity(
+        //         opacity: c.centerScore, // 0..1
+        //         child: const Icon(
+        //           Icons.fiber_manual_record,
+        //           size: 14,
+        //           color: Color(0xff0fd86e),
+        //         ),
+        //       ),
+        //     ),
+        //   ),
 
         if (c.livenessResult != null)
           _buildLivenessBanner(context, c.livenessResult!),
@@ -314,7 +332,8 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
                       const SizedBox(width: 6),
                       Text(
                         '${c.screensaverCountdown}',
-                        style: const TextStyle(color: Color(0xffc7ffdf), fontSize: 13, fontWeight: FontWeight.w700),
+                        style: const TextStyle(color: Color(0xffc7ffdf), fontSize: 13,
+                            decoration: TextDecoration.none,fontWeight: FontWeight.w700),
                       ),
                     ],
                   ),

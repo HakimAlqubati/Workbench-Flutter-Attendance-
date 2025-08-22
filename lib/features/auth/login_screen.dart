@@ -19,6 +19,18 @@ class _LoginScreenState extends State<LoginScreen> {
 
   final _auth = AuthService();
 
+  @override
+  void initState() {
+    super.initState();
+
+    // فقط أثناء التطوير، املأ الحقول افتراضيًا
+    assert(() {
+      _emailCtrl.text = 'admin@admin.com';
+      _passCtrl.text = '123456';
+      return true;
+    }());
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() { _loading = true; _error = null; });

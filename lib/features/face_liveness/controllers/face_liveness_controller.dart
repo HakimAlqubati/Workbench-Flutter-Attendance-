@@ -46,6 +46,17 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
   /// القيمة المقروءة من الشاشة (0..1)
   double get ratioProgress => _ratioProgress;
 
+  bool _centeredInOval = false;
+  bool get centeredInOval => _centeredInOval;
+
+  /// 0..1 كلما اقتربت من المركز زادت القيمة (1.0 = في قلب المركز)
+  double _centerScore = 0.0;
+  double get centerScore => _centerScore;
+
+  /// إزاحة مركز الوجه عن مركز البيضاوي بالبيكسل (للديبغ/العرض)
+  Offset? _centerOffsetPx;
+  Offset? get centerOffsetPx => _centerOffsetPx;
+
   /// تحديث داخلي
   set _setRatioProgress(double v) {
     _ratioProgress = v.clamp(0.0, 1.0);
@@ -379,6 +390,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
 
   // ===== Core vision loop =====
   Future<void> _onNewCameraImage(CameraImage image) async {
+
     if (!_readyForNextImage || !_cameraOpen) return;
     _readyForNextImage = false;
 
@@ -432,6 +444,13 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
           screenSize: _screenSize,
           isFront: _frontCamera?.lensDirection == CameraLensDirection.front,
         );
+        _centeredInOval = _isFaceCenteredInOvalOnScreen(
+          faceCenter: rect.center,
+          imageRawSize: Size(rawW, rawH),
+          screenSize: _screenSize,
+          isFront: _frontCamera?.lensDirection == CameraLensDirection.front,
+        );
+
 
         _updateFaceDetected(faceRatio >= kMinFaceRatio);
 
@@ -456,6 +475,64 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     }
   }
 
+  bool _isFaceCenteredInOvalOnScreen({
+    required Offset faceCenter,
+    required Size imageRawSize,
+    required Size screenSize,
+    required bool? isFront,
+    double epsilonPct = kCenterEpsilonPct, // تقبّل الانحراف
+  }) {
+    if (screenSize == Size.zero) {
+      _centerScore = 0.0;
+      _centerOffsetPx = null;
+      return false;
+    }
+
+    // نفس إسقاط الإحداثيات من الصورة إلى الشاشة (portrait)
+    final srcW = imageRawSize.height; // portrait width
+    final srcH = imageRawSize.width;  // portrait height
+    final scale = math.max(screenSize.width / srcW, screenSize.height / srcH);
+    final dxPad = (screenSize.width  - srcW * scale) / 2.0;
+    final dyPad = (screenSize.height - srcH * scale) / 2.0;
+
+    double cx = faceCenter.dx * scale + dxPad;
+    final double cy = faceCenter.dy * scale + dyPad;
+
+    // مرآة الكاميرا الأمامية
+    if (isFront == true) {
+      final midX = screenSize.width / 2;
+      cx = 2 * midX - cx;
+    }
+
+    // مركز ونصفي قطر البيضاوي على الشاشة
+    final ovalCx = screenSize.width  * (0.5 + kOvalCxOffsetPct);
+    final ovalCy = screenSize.height * (0.5 + kOvalCyOffsetPct);
+    final ovalRx = (screenSize.width  * kOvalRxPct);
+    final ovalRy = (screenSize.height * kOvalRyPct);
+
+    // إزاحة الوجه عن المركز (بيكسل)
+    final offXpx = cx - ovalCx;
+    final offYpx = cy - ovalCy;
+    _centerOffsetPx = Offset(offXpx, offYpx);
+
+    // طبيع (normalize) الإزاحة على أنصاف الأقطار
+    final dxn = ovalRx == 0 ? 0.0 : offXpx / ovalRx; // نسبة -1..1
+    final dyn = ovalRy == 0 ? 0.0 : offYpx / ovalRy;
+
+    // نصف قطر “منطقة المركز” المسموح بها كنسبة من نصف القطر الأصلي
+    final rAllow = epsilonPct.clamp(0.02, 0.9);
+
+    // المسافة المعيارية من المركز داخل جهاز إحداثي البيضاوي
+    final r = math.sqrt(dxn * dxn + dyn * dyn); // 0 عند القلب
+
+    // درجة المحاذاة: 1 عند المركز، 0 عند حد rAllow أو خارجه
+    _centerScore = (1.0 - (r / rAllow)).clamp(0.0, 1.0);
+
+    // true إذا داخل “منطقة المركز”
+    return r <= rAllow;
+  }
+
+
   bool _isFaceInsideOvalOnScreen({
     required Offset faceCenter,
     required Size imageRawSize,
@@ -463,30 +540,50 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     required bool? isFront,
   }) {
     if (screenSize == Size.zero) return false;
+
     final srcW = imageRawSize.height; // portrait width
     final srcH = imageRawSize.width;  // portrait height
-
     final scale = math.max(screenSize.width / srcW, screenSize.height / srcH);
     final dx = (screenSize.width - srcW * scale) / 2.0;
     final dy = (screenSize.height - srcH * scale) / 2.0;
 
-    double cxOnScreen = faceCenter.dx * scale + dx;
-    final double cyOnScreen = faceCenter.dy * scale + dy;
+    final faceRect = _lastFaceRect;
+    if (faceRect == null) return false;
 
-    if (isFront == true) {
-      final midX = screenSize.width / 2;
-      cxOnScreen = 2 * midX - cxOnScreen;
-    }
+    List<Offset> corners = [
+      faceRect.topLeft,
+      faceRect.topRight,
+      faceRect.bottomLeft,
+      faceRect.bottomRight,
+    ];
 
     final ovalCx = screenSize.width * (0.5 + kOvalCxOffsetPct);
     final ovalCy = screenSize.height * (0.5 + kOvalCyOffsetPct);
     final ovalRx = (screenSize.width * kOvalRxPct) * kOvalInsideEpsilon;
     final ovalRy = (screenSize.height * kOvalRyPct) * kOvalInsideEpsilon;
 
-    final dxn = (cxOnScreen - ovalCx) / (ovalRx == 0 ? 1 : ovalRx);
-    final dyn = (cyOnScreen - ovalCy) / (ovalRy == 0 ? 1 : ovalRy);
-    return (dxn * dxn + dyn * dyn) <= 1.0;
+    for (var point in corners) {
+      double cx = point.dx * scale + dx;
+      double cy = point.dy * scale + dy;
+
+      // إذا الكاميرا أمامية نعكس X
+      if (isFront == true) {
+        final midX = screenSize.width / 2;
+        cx = 2 * midX - cx;
+      }
+
+      const double relax = 0.80;
+
+      final dxn = (cx - ovalCx) / (ovalRx / relax);
+      final dyn = (cy - ovalCy) / (ovalRy / relax);
+      final distance = dxn * dxn + dyn * dyn;
+
+      if (distance > 1.0) return false; // نقطة خارج البيضاوي
+    }
+
+    return true; // جميع الزوايا داخل البيضاوي
   }
+
 
   void _updateFaceDetected(bool detected) {
     if (detected == _faceDetected) return;
@@ -564,10 +661,11 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
       _lastFaceRect = null;
       notifyListeners();
 
-      final liveJson = await _net.sendLiveness(file.path);
-      _livenessResult = liveJson ?? {'error': 'Invalid response'};
-      notifyListeners();
-
+      if (kEnableLiveness) {
+        final liveJson = await _net.sendLiveness(file.path);
+        _livenessResult = liveJson ?? {'error': 'Invalid response'};
+        notifyListeners();
+      }
       if (kEnableFaceRecognition) {
         final recog = await _net.sendFaceRecognition(file.path);
         print('recoRequest{$recog}');

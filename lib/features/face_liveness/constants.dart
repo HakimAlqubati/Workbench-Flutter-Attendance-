@@ -40,7 +40,7 @@ const double kOvalInsideEpsilon = 0.95; // was 0.20 (too strict)
 
 /// ------- Timings (dynamic via SettingsStore) -------
 /// استخدم getters آمنة بدل ثوابت/متغيرات أعلى الملف.
-/// لو SettingsStore لم يتهيّأ بعد → رجّع fallback (5 و 300).
+/// لو SettingsStore لم يتهيّأ بعد → رجّع fallback (5 و 59).
 int get kCountdownSeconds {
   try {
     return SettingsStore.I.value.countdownSeconds;
@@ -53,7 +53,7 @@ int get kScreensaverSeconds {
   try {
     return SettingsStore.I.value.screensaverSeconds;
   } catch (_) {
-    return 300;
+    return 30;
   }
 }
 
@@ -69,9 +69,9 @@ const int kDetectEveryN = 4;
 const bool kAllowInsecureHttps = true;
 
 /// ------- Feature flags -------
-const bool kEnableLiveness        = bool.fromEnvironment('ENABLE_LIVENESS', defaultValue: true);
+const bool kEnableLiveness        = bool.fromEnvironment('ENABLE_LIVENESS', defaultValue: false);
 // const bool kEnableFaceRecognition = bool.fromEnvironment('ENABLE_FACE_RECOGNITION', defaultValue: false);
-const bool kEnableOnDeviceDetection = bool.fromEnvironment('ENABLE_ONDEVICE_DETECTION', defaultValue: true);
+const bool kEnableOnDeviceDetection = bool.fromEnvironment('ENABLE_ONDEVICE_DETECTION', defaultValue: false);
 bool get kEnableFaceRecognition {
   try {
     return SettingsStore.I.value.enableFaceRecognition;
@@ -80,3 +80,6 @@ bool get kEnableFaceRecognition {
   }
 }
 
+
+// مدى تقبّل الانحراف عن مركز البيضاوي كنسبة من نصف القطر (0..1)
+const double kCenterEpsilonPct = 0.18; // جرّب 0.15..0.22 حسب ذوقك

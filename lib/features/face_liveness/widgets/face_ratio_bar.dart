@@ -56,6 +56,7 @@ class FaceRatioBar extends StatelessWidget {
                         color: Colors.white,
                         fontSize: 12.5,
                         fontWeight: FontWeight.w600,
+                        decoration: TextDecoration.none,
                       ),
                     ),
                     const Spacer(),
@@ -64,6 +65,7 @@ class FaceRatioBar extends StatelessWidget {
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w800,
+                        decoration: TextDecoration.none,
                         fontSize: 12.5,
                       ),
                     ),
@@ -137,6 +139,7 @@ class _InlineBrightnessChip extends StatelessWidget {
         style: const TextStyle(
           color: Colors.white,
           fontSize: 12.5,
+          decoration: TextDecoration.none,
           fontWeight: FontWeight.w700,
         ),
       ),

@@ -11,7 +11,7 @@ const _kKeyEnableFaceRecognition = 'settings.enable_face_recognition';
 
 /// القيم الافتراضية
 const _kDefaultCountdownSeconds   = 5;
-const _kDefaultScreensaverSeconds = 300;
+const _kDefaultScreensaverSeconds = 59;
 const _kDefaultOvalRxPct = kDefaultOvalRxPct;
 const _kDefaultOvalRyPct = kDefaultOvalRyPct;
 const _kDefaultEnableFaceRecognition = false;

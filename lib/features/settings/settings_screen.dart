@@ -37,28 +37,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.dispose();
   }
 
+
+
   Future<void> _save() async {
     final cd = int.tryParse(_countdownCtrl.text.trim()) ?? 5;
-    final sv = int.tryParse(_screensaverCtrl.text.trim()) ?? 300;
-    final rx = double.tryParse(_ovalRxCtrl.text.trim()) ?? kDefaultOvalRxPct;
-    final ry = double.tryParse(_ovalRyCtrl.text.trim()) ?? kDefaultOvalRyPct;
+    final sv = (int.tryParse(_screensaverCtrl.text.trim()) ?? 59).clamp(15, 59).toInt();
+
+    double? _validateOrFallback(String text, double fallback) {
+      if (text.trim().isEmpty) return fallback;
+
+      final v = double.tryParse(text.trim());
+      if (v == null || v < 0.1 || v > 0.5) return null;
+      return double.parse(v.toStringAsFixed(2));
+    }
+
+    final rx = _validateOrFallback(_ovalRxCtrl.text, kDefaultOvalRxPct);
+    final ry = _validateOrFallback(_ovalRyCtrl.text, kDefaultOvalRyPct);
+
+    if (rx == null || ry == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ Oval Rx and Ry must be between 0.1 and 0.5 if provided.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    // تحديث الحقول بالنص النهائي
+    _ovalRxCtrl.text = rx.toStringAsFixed(2);
+    _ovalRyCtrl.text = ry.toStringAsFixed(2);
 
     await SettingsStore.I.setCountdownSeconds(cd);
     await SettingsStore.I.setScreensaverSeconds(sv);
-    await SettingsStore.I.setOvalRxPct(rx.clamp(0.1, 1.0));
-    await SettingsStore.I.setOvalRyPct(ry.clamp(0.1, 1.0));
+    await SettingsStore.I.setOvalRxPct(rx);
+    await SettingsStore.I.setOvalRyPct(ry);
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Settings saved successfully')),
     );
-  }
 
-  Future<void> _saveAndOpenCamera() async {
-    await _save();
-    if (!mounted) return;
     Navigator.pushNamed(context, '/face-liveness');
   }
+
 
   Widget _numberField({
     required String label,
@@ -126,11 +148,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onPressed: _save,
             icon: const Icon(Icons.save_outlined),
           ),
-          IconButton(
-            tooltip: 'Open Camera',
-            onPressed: _saveAndOpenCamera,
-            icon: const Icon(Icons.camera_alt_outlined),
-          ),
         ],
       ),
       body: Padding(
@@ -149,8 +166,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               label: 'Screensaver (seconds)',
               controller: _screensaverCtrl,
               suffix: 'sec',
-              hint: '300',
+              hint: '59',
               decimal: false,
+              // formatters: [
+              //   RangeTextInputFormatter(min: 15, max: 59), // ✅ أضف هذا السطر
+              // ],
             ),
             const SizedBox(height: 12),
             _numberField(
@@ -158,9 +178,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               controller: _ovalRxCtrl,
               hint: kDefaultOvalRxPct.toString(),
               decimal: true,
-              formatters: [
-                RangeTextInputFormatter(min: 0.1, max: 1.0),
-              ],
+              // formatters: [
+              //   RangeTextInputFormatter(min: 0.1, max: 1.0),
+              // ],
             ),
             const SizedBox(height: 12),
             _numberField(
@@ -168,9 +188,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               controller: _ovalRyCtrl,
               hint: kDefaultOvalRyPct.toString(),
               decimal: true,
-              formatters: [
-                RangeTextInputFormatter(min: 0.1, max: 1.0),
-              ],
+              // formatters: [
+              //   RangeTextInputFormatter(min: 0.1, max: 1.0),
+              // ],
             ),
             const SizedBox(height: 16),
             SwitchListTile(
