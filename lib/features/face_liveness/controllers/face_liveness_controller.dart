@@ -389,25 +389,26 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
   }
 
   // ===== Core vision loop =====
-  Future<void> _onNewCameraImage(CameraImage image) async {
 
+  Future<void> _onNewCameraImage(CameraImage image) async {
+    // حماية تدفق الصور
     if (!_readyForNextImage || !_cameraOpen) return;
     _readyForNextImage = false;
 
+    // تحديث آخر حجم خام للصورة
     _latestImageSize = Size(image.width.toDouble(), image.height.toDouble());
 
-
+    // ===== قياس الإضاءة كل N إطار =====
     _frameCount = (_frameCount + 1) % kBrightnessSampleEveryN;
     if (_frameCount == 0) {
-      final luma = _estimateLuma(image);     // 0..255
+      final luma = _estimateLuma(image); // 0..255
       _brightnessLevel = luma;
       _brightnessStatus = _statusForLuma(luma);
       debugPrint('LUMA=${_brightnessLevel?.toStringAsFixed(1)} | ${_brightnessStatus}');
-
-      notifyListeners(); // مهم جداً
+      notifyListeners(); // مهم لإظهار شريحة الإضاءة فورًا
     }
 
-    // Decimate detection
+    // ===== تقليل كلفة الكشف (decimation) =====
     _detectCounter = (_detectCounter + 1) % kDetectEveryN;
     if (_detectCounter != 0) {
       _readyForNextImage = true;
@@ -420,57 +421,87 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     _isDetecting = true;
 
     try {
+      // تجهيز الصورة للمكتبة
       final inputImage = _toInputImage(image);
       final faces = await _detector!.processImage(inputImage);
 
       if (faces.isNotEmpty) {
-        final face = faces.first;
-        final rect = face.boundingBox; // portrait space
+        // اختر أكبر وجه (غالبًا الأقرب)
+        final face = faces.reduce((a, b) =>
+        (a.boundingBox.width * a.boundingBox.height) >
+            (b.boundingBox.width * b.boundingBox.height) ? a : b);
+
+        final rect = face.boundingBox; // إحداثيات portrait
         _lastFaceRect = rect;
 
         final rawW = image.width.toDouble();
         final rawH = image.height.toDouble();
-        final faceArea = rect.width * rect.height;
-        final frameArea = rawW * rawH;
-        final faceRatio = frameArea > 0 ? faceArea / frameArea : 0.0;
-        _faceRatioValue = faceRatio;
 
-        final target = (faceRatio / (kMinFaceRatio * kFitRelaxFactor)).clamp(0.0, 1.0);
-        _ratioProgress = ui.lerpDouble(_ratioProgress, target, 0.18)!;
+        // --- الحسابات المكانية بالنسبة للشاشة ---
+        final bool isFront =
+            _frontCamera?.lensDirection == CameraLensDirection.front;
 
+        // 1) هل الوجه بكامله داخل البيضاوي؟
         _insideOval = _isFaceInsideOvalOnScreen(
           faceCenter: rect.center,
           imageRawSize: Size(rawW, rawH),
           screenSize: _screenSize,
-          isFront: _frontCamera?.lensDirection == CameraLensDirection.front,
+          isFront: isFront,
         );
+
+        // 2) هل الوجه متمركز بما يكفي في قلب البيضاوي؟ (للإظهار/التشويق إن احتجت)
         _centeredInOval = _isFaceCenteredInOvalOnScreen(
           faceCenter: rect.center,
           imageRawSize: Size(rawW, rawH),
           screenSize: _screenSize,
-          isFront: _frontCamera?.lensDirection == CameraLensDirection.front,
+          isFront: isFront,
         );
 
+        // 3) عوامل التقدّم: الحجم (0..1) والتمركز (0..1)
+        final double sizeFactor = _sizeScore(rect, Size(rawW, rawH)); // 0..1
+        final double posFactor = _positionFactor(
+          faceCenterRaw: rect.center,
+          imageRawSize: Size(rawW, rawH),
+          screenSize: _screenSize,
+          isFront: isFront,
+        ); // 0..1 (0 إذا خارج البيضاوي)
 
-        _updateFaceDetected(faceRatio >= kMinFaceRatio);
+        // 4) الهدف المركّب لشريط Face Fit
+        if (!_insideOval || posFactor == 0.0) {
+          // خرج الوجه من البيضاوي أو يكاد: صفّر سريعًا (إحساس حاسم وواضح)
+          _setRatioProgress = 0.0;
+          notifyListeners();
+        } else {
+          // داخل البيضاوي: امزج الحجم مع التمركز
+          // يمكنك وزن العوامل لو أردت (مثلاً 0.7 * size + 0.3 * pos)
+          final double targetProgress = (sizeFactor * posFactor).clamp(0.0, 1.0);
+          _blendProgress(targetProgress, smooth: 0.22);
+        }
 
-        if (_faceDetected && _insideOval && _ratioProgress >= 0.99) {
+        // 5) تحديث حالة "وجه مُكتشف" (يمكن ضبط العتبة بحسب تجربتك)
+        _updateFaceDetected(sizeFactor >= (kMinFaceRatio * 0.6));
+
+        // 6) التحكّم بالعدّاد (Countdown) بناء على الشروط
+        if (_faceDetected && _insideOval /*&& _ratioProgress >= 0.99*/) {
           _beginCountdown();
         } else {
           _stopCountdown();
         }
       } else {
+        // لا توجد وجوه: هبوط سريع للشريط وإيقاف العدّاد
         _lastFaceRect = null;
         _insideOval = false;
         _updateFaceDetected(false);
+        _collapseProgressFast(factor: 0.35); // صفر سريعًا
         _stopCountdown();
       }
     } catch (_) {
-      // swallow
+      // تجاهل الأخطاء اللحظية
     } finally {
       _isDetecting = false;
       _readyForNextImage = true;
       notifyListeners();
+      // مهلة صغيرة جدًا لمنع تشبّع حلقة الرؤية
       await Future.delayed(const Duration(milliseconds: 2));
     }
   }
@@ -605,6 +636,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     if (isCountdownActive) return;
     _countdown = kCountdownSeconds;
 
+    userActivity();
     Timer.periodic(const Duration(seconds: 1), (Timer t) async {
       if (_showScreensaver) { t.cancel(); return; }
       if (!_insideOval || !_faceDetected) { _stopCountdown(); t.cancel(); return; }
@@ -783,6 +815,77 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     _lastFaceTs = DateTime.now();
     _updateRatio(face.boundingBox, imageSize);
   }
+
+  // ===== Progress helpers (size + position) =====
+
+  /// يحسب درجة الحجم 0..1 من غير ما تتأثر باتجاه الصورة
+  double _sizeScore(Rect faceRect, Size imageSize, {double target = 0.22}) {
+    final imgShort = math.min(imageSize.width, imageSize.height);
+    final faceShort = math.min(faceRect.width, faceRect.height);
+    final raw = (faceShort / (imgShort == 0 ? 1 : imgShort)).clamp(0.0, 1.0);
+    // الهدف الذي نعتبره ممتاز للالتقاط (اضبط target حسب تصميمك)
+    return (raw / target).clamp(0.0, 1.0);
+  }
+
+  /// يحسب عامل التمركز 0..1 داخل البيضاوي.
+  /// 1 في المركز، يقل تدريجياً نحو الحواف، 0 إذا خرج (distance>=1).
+  double _positionFactor({
+    required Offset faceCenterRaw,   // إحداثيات من فضاء الصورة (portrait)
+    required Size imageRawSize,
+    required Size screenSize,
+    required bool isFront,
+  }) {
+    if (screenSize == Size.zero) return 0.0;
+
+    // إسقاط إحداثيات الصورة على الشاشة (portrait)
+    final srcW = imageRawSize.height; // portrait width
+    final srcH = imageRawSize.width;  // portrait height
+    final scale = math.max(screenSize.width / srcW, screenSize.height / srcH);
+    final dxPad = (screenSize.width  - srcW * scale) / 2.0;
+    final dyPad = (screenSize.height - srcH * scale) / 2.0;
+
+    double cx = faceCenterRaw.dx * scale + dxPad;
+    final double cy = faceCenterRaw.dy * scale + dyPad;
+
+    // مرآة للكاميرا الأمامية
+    if (isFront) {
+      final midX = screenSize.width / 2;
+      cx = 2 * midX - cx;
+    }
+
+    // معلمات البيضاوي على الشاشة
+    final ovalCx = screenSize.width  * (0.5 + kOvalCxOffsetPct);
+    final ovalCy = screenSize.height * (0.5 + kOvalCyOffsetPct);
+    final ovalRx = (screenSize.width  * kOvalRxPct);
+    final ovalRy = (screenSize.height * kOvalRyPct);
+
+    // مسافة “موحدة” من مركز البيضاوي
+    final dxn = (cx - ovalCx) / (ovalRx == 0 ? 1 : ovalRx);
+    final dyn = (cy - ovalCy) / (ovalRy == 0 ? 1 : ovalRy);
+    final r = math.sqrt(dxn * dxn + dyn * dyn);
+
+    if (r >= 1.0) return 0.0; // خارج البيضاوي
+
+    // منحنى ناعم: قريب من 1 في المركز، ويهبط تدريجياً نحو الحافة
+    // اضبط p إذا أردت منحنى أدق/أكثر حدة.
+    const p = 1.4;
+    return math.pow((1.0 - r), p).toDouble().clamp(0.0, 1.0);
+  }
+
+  /// يمزج التقدّم الحالي مع الهدف بسلاسة
+  void _blendProgress(double target, {double smooth = 0.22}) {
+    _setRatioProgress = _ratioProgress + (target - _ratioProgress) * smooth;
+    notifyListeners();
+  }
+
+  /// خفض سريع إلى الصفر عندما يختفي الوجه أو يخرج من البيضاوي
+  void _collapseProgressFast({double factor = 0.15}) {
+    _setRatioProgress = _ratioProgress * (1.0 - factor);
+    if (_ratioProgress < 0.02) _setRatioProgress = 0.0;
+    notifyListeners();
+  }
+
+
   // Public actions
   Future<void> tapNextEmployee() async => _resumeLivePreview();
 }

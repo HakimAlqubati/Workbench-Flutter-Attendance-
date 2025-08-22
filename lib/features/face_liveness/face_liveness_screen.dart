@@ -151,10 +151,18 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
           ),
 
         if (c.cameraOpen && c.capturedFile == null)
-          Positioned.fill(
+
+
+    Positioned.fill(
             child: IgnorePointer(
               child: CustomPaint(
-                painter: FrameMaskPainter(inside: c.insideOval),
+                painter: FrameMaskPainter(
+                  inside: c.insideOval,
+                  activeColor: Theme.of(context).primaryColor,                 // ✅ من الثيم
+                  inactiveColor: Colors.white,                     // أو theme.colorScheme.outline.withOpacity(.9)
+                  glow: (math.sin(glowCtrl.value * 2 * math.pi) + 1) / 2, // لو حابب توهّج لطيف 0..1
+                  strokeWidth: 2.0,
+                ),
                 foregroundPainter: FrameGlowPainter(
                   glowCtrl,
                   inside: c.insideOval,
@@ -180,35 +188,37 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
 
         if (c.cameraOpen && c.countdown != null)
           Positioned(
-            bottom: MediaQuery.of(context).size.height * 0.15,
-            left: 16,
-            right: 16,
+            bottom: MediaQuery.of(context).size.height * 0.18,
+            left: 0,
+            right: 0,
             child: Center(
-              child: Glass(
-                blur: 12,
-                opacity: .16,
-                border: true,
-                radius: 20,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 10,
-                ),
-                child: Text(
-                  (c.countdown! > 0) ? '${c.countdown!}' : '✓',
-                  style: TextStyle(
-                    fontSize: MediaQuery.of(context).size.width * 0.16,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.5,
-                    color: const Color(0xff0fd86e),
-                    shadows: const [
-                      Shadow(
-                        color: Colors.black87,
-                        blurRadius: 22,
-                        offset: Offset(0, 6),
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(begin: 1.0, end: 1.2),
+                key: ValueKey(c.countdown),
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut,
+                builder: (context, scale, child) {
+                  return Transform.scale(
+                    scale: scale,
+                    child: Text(
+                      (c.countdown! > 0) ? '${c.countdown!}' : '✓',
+                      style: TextStyle(
+                        fontSize: MediaQuery.of(context).size.width * 0.12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        decoration: TextDecoration.none,
+                        letterSpacing: 0.5,
+                        shadows: const [
+                          Shadow(
+                            color: Colors.black87,
+                            blurRadius: 12,
+                            offset: Offset(0, 4),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
+                    ),
+                  );
+                },
               ),
             ),
           ),
