@@ -69,7 +69,7 @@ const int kDetectEveryN = 4;
 const bool kAllowInsecureHttps = true;
 
 /// ------- Feature flags -------
-const bool kEnableLiveness        = bool.fromEnvironment('ENABLE_LIVENESS', defaultValue: false);
+const bool kEnableLiveness        = bool.fromEnvironment('ENABLE_LIVENESS', defaultValue: true);
 // const bool kEnableFaceRecognition = bool.fromEnvironment('ENABLE_FACE_RECOGNITION', defaultValue: false);
 const bool kEnableOnDeviceDetection = bool.fromEnvironment('ENABLE_ONDEVICE_DETECTION', defaultValue: false);
 bool get kEnableFaceRecognition {
@@ -89,6 +89,6 @@ String get kLivenessApiUrl {
     final base = SettingsStore.I.value.baseUrl;
     return '$base/api/liveness';
   } catch (_) {
-    return 'https://54.251.132.76:5000/api/liveness';
+    return 'http://47.130.152.211:5000/api/liveness';
   }
 }

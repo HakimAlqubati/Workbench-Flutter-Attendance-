@@ -244,12 +244,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 if (mounted) setState(() {});
               },
             ),
-            _numberField(
-              label: 'Server Base URL',
-              controller: _baseUrlCtrl,
-              hint: 'Default: https://54.251.132.76:5000',
-              decimal: false,
+            Card(
+              elevation: 1,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(color: primaryColor.withOpacity(0.4)),
+              ),
+              color: Colors.white.withOpacity(0.06),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: TextField(
+                  controller: _baseUrlCtrl,
+                  keyboardType: TextInputType.url, // نصي عادي (URL مناسب هنا)
+                  decoration: const InputDecoration(
+                    labelText: 'Server Base URL',
+                    hintText: 'Default: http://47.130.152.211:5000',
+                    border: InputBorder.none,
+                    labelStyle: TextStyle(color: Colors.white70),
+                  ),
+                  style: const TextStyle(color: Colors.white),
+                  textAlign: TextAlign.center,
+                  cursorColor: primaryColor,
+                ),
+              ),
             ),
+
             const SizedBox(height: 12),
             ElevatedButton.icon(
               onPressed: _save,

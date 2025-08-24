@@ -64,7 +64,7 @@ class SettingsStore {
       ovalRxPct: _kDefaultOvalRxPct,
       ovalRyPct: _kDefaultOvalRyPct,
       enableFaceRecognition: _kDefaultEnableFaceRecognition,
-        baseUrl: 'https://54.251.132.76:5000'
+        baseUrl: 'http://47.130.152.211:5000'
     ),
   );
 
@@ -72,7 +72,7 @@ class SettingsStore {
 
   Future<void> init() async {
     _prefs ??= await SharedPreferences.getInstance();
-    final base = _prefs?.getString('baseUrl') ?? 'https://54.251.132.76:5000';
+    final base = _prefs?.getString('baseUrl') ?? 'http://47.130.152.211:5000';
 
 
     final countdown = _prefs!.getInt(_kKeyCountdownSeconds) ?? _kDefaultCountdownSeconds;
@@ -119,7 +119,7 @@ class SettingsStore {
   }
 
 
-  String baseUrl = 'https://54.251.132.76:5000';
+  String baseUrl = 'http://47.130.152.211:5000';
 
   Future<void> setBaseUrl(String url) async {
     baseUrl = url;

@@ -308,7 +308,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
       _cameraOpen = false;
       notifyListeners();
       await _disposeCamera();
-      _startClockMover();
+      // _startClockMover();
     });
 
     _screensaverCountdown = kScreensaverSeconds;
@@ -716,9 +716,13 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
       _lastFaceRect = null;
       notifyListeners();
 
+      debugPrint('hiiii{$kEnableLiveness}');
       if (kEnableLiveness) {
+
         final liveJson = await _net.sendLiveness(file.path);
+        debugPrint('hakim{$liveJson}');
         _livenessResult = liveJson ?? {'error': 'Invalid response'};
+        print('livenessResponse{$_livenessResult}');
         notifyListeners();
       }
       if (kEnableFaceRecognition) {

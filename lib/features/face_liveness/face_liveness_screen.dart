@@ -10,7 +10,7 @@ import 'package:my_app/features/face_liveness/painters/face_box_painter.dart';
 import 'package:my_app/features/face_liveness/painters/frame_glow_painter.dart';
 import 'package:my_app/features/face_liveness/painters/frame_mask_painter.dart';
 import 'package:my_app/features/face_liveness/widgets/face_ratio_bar.dart';
-
+import 'widgets/oval_clipper.dart';
 import 'constants.dart';
 import 'widgets/gclass.dart';
 import 'widgets/floating_logo.dart';
@@ -110,7 +110,7 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
     }
     return Screensaver(
       now: c.now,
-      alignment: align,
+      alignment: Alignment.topCenter,
       blink: c.clockBlink,
       onTap: () async => c.exitScreensaverAndReopen(),
     );
@@ -120,14 +120,21 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
     final cam = c.controller;
     final Widget basePreview = (c.capturedFile != null)
         ? Transform(
-            alignment: Alignment.center,
-            transform: Matrix4.identity()..rotateY(math.pi),
-            child: Image.file(File(c.capturedFile!.path), fit: BoxFit.cover),
-          )
+      alignment: Alignment.center,
+      transform: Matrix4.identity()..rotateY(math.pi), // احتفظ بالمرايا إن أردتها
+      child: ClipPath(
+        clipper: OvalClipper(MediaQuery.of(context).size), // نفس موضع/حجم البيضاوي
+        child: Image.file(
+          File(c.capturedFile!.path),
+          fit: BoxFit.cover,
+        ),
+      ),
+    )
         : (cam != null && cam.value.isInitialized)
         ? CameraPreviewCover(controller: cam)
         : const ColoredBox(color: Colors.black);
 
+    Positioned.fill(child: ColoredBox(color: Colors.black));
 
     // حدد لون البيضاوي بناءً على نفس شروط العدّاد:
     // خارج البيضاوي -> لون خافت/أبيض، داخل لكن غير مؤهل -> برتقالي تحذيري، مؤهل -> أخضر.

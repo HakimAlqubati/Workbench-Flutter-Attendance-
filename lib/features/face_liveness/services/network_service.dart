@@ -5,6 +5,7 @@
 // =============================
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/cupertino.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 import '../constants.dart';
@@ -25,17 +26,29 @@ class LivenessNetworkService {
     final req = http.MultipartRequest('POST', uri)
       ..files.add(await http.MultipartFile.fromPath('image', imagePath));
 
-
     final io = IOClient(_newHttpClient());
     try {
+      debugPrint('➡️ Request: ${req.method} $uri');
+      debugPrint('Headers: ${req.headers}');
+      debugPrint('Fields: ${req.fields}');
+      for (var f in req.files) {
+        debugPrint('File: field=${f.field}, filename=${f.filename}, length=${f.length}');
+      }
+
       final streamed = await io.send(req).timeout(const Duration(seconds: 12));
       final res = await http.Response.fromStream(streamed);
+
+      debugPrint('⬅️ Response status: ${res.statusCode}');
+      debugPrint('Response headers: ${res.headers}');
+      debugPrint('Response body: ${res.body}');
+
       if (res.body.isEmpty) return null;
       return jsonDecode(res.body) as Map<String, dynamic>;
     } finally {
       io.close();
     }
   }
+
 
 
   Future<Map<String, dynamic>?> sendFaceRecognition(String imagePath) async {
