@@ -2,20 +2,27 @@ import 'package:flutter/foundation.dart';
 import 'package:my_app/features/settings/settings_store.dart';
 
 /// ------- API endpoints -------
-
 const String kFaceRecognitionApiUrl =
     'https://workbench.ressystem.com/api/hr/faceRecognition';
+
+String get kLivenessApiUrl {
+  try {
+    final base = SettingsStore.I.value.baseUrl;
+    return '$base/api/liveness';
+  } catch (_) {
+    return 'http://47.130.152.211:5000/api/liveness';
+  }
+}
 
 /// ------- Face fit thresholds -------
 const double kMinFaceRatio = 0.06;
 const double kFitRelaxFactor = 1.30;
 
 /// ------- Ellipse window (screen %) -------
-// const double kOvalRxPct = 0.36;
-// const double kOvalRyPct = 0.24;
+/// ملاحظة: نستخدم getters ديناميكية لقراءة القيم من SettingsStore (إن وُجدت)
 const double kDefaultOvalRxPct = 0.42;
 const double kDefaultOvalRyPct = 0.27;
-/// Getters dynamic (لو تم حفظ قيم جديدة في SettingsStore → تُستخدم، وإلا fallback على الافتراضي)
+
 double get kOvalRxPct {
   try {
     return SettingsStore.I.value.ovalRxPct;
@@ -39,8 +46,6 @@ const double kOvalCyOffsetPct = -0.03;
 const double kOvalInsideEpsilon = 0.95; // was 0.20 (too strict)
 
 /// ------- Timings (dynamic via SettingsStore) -------
-/// استخدم getters آمنة بدل ثوابت/متغيرات أعلى الملف.
-/// لو SettingsStore لم يتهيّأ بعد → رجّع fallback (5 و 59).
 int get kCountdownSeconds {
   try {
     return SettingsStore.I.value.countdownSeconds;
@@ -70,8 +75,8 @@ const bool kAllowInsecureHttps = true;
 
 /// ------- Feature flags -------
 const bool kEnableLiveness        = bool.fromEnvironment('ENABLE_LIVENESS', defaultValue: true);
-// const bool kEnableFaceRecognition = bool.fromEnvironment('ENABLE_FACE_RECOGNITION', defaultValue: false);
 const bool kEnableOnDeviceDetection = bool.fromEnvironment('ENABLE_ONDEVICE_DETECTION', defaultValue: false);
+
 bool get kEnableFaceRecognition {
   try {
     return SettingsStore.I.value.enableFaceRecognition;
@@ -80,15 +85,25 @@ bool get kEnableFaceRecognition {
   }
 }
 
-
 // مدى تقبّل الانحراف عن مركز البيضاوي كنسبة من نصف القطر (0..1)
 const double kCenterEpsilonPct = 0.18; // جرّب 0.15..0.22 حسب ذوقك
 
-String get kLivenessApiUrl {
-  try {
-    final base = SettingsStore.I.value.baseUrl;
-    return '$base/api/liveness';
-  } catch (_) {
-    return 'http://47.130.152.211:5000/api/liveness';
-  }
+/// ------- Face size thresholds (faceShort/imgShort) -------
+class FaceSizeThresholds {
+  final double rawMin;   // أصغر نسبة مقبولة (لو أقل ⇒ بعيد)
+  final double rawIdeal; // النسبة المثلى
+  final double rawMax;   // أكبر نسبة مقبولة (لو أعلى ⇒ قريب جداً)
+
+  const FaceSizeThresholds({
+    required this.rawMin,
+    required this.rawIdeal,
+    required this.rawMax,
+  });
+
+  /// إعدادات افتراضية مناسبة لمعظم الأجهزة (عدّل حسب تجربتك)
+  static const FaceSizeThresholds defaults = FaceSizeThresholds(
+    rawMin: 0.40,   // بعيد
+    rawIdeal: 0.22, // مثالي
+    rawMax: 0.50,   // قريب جداً
+  );
 }

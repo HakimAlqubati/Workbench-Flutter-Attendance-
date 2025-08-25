@@ -2,7 +2,6 @@
 // File: lib/features/face_liveness/controller/face_liveness_controller.dart
 // =============================
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -12,7 +11,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
-import 'package:intl/intl.dart';
 
 import '../constants.dart';
 import '../services/network_service.dart';
@@ -20,6 +18,8 @@ import '../services/network_service.dart';
 class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver {
   // ===== Dependencies / Services =====
   final LivenessNetworkService _net = LivenessNetworkService();
+
+  DateTime? _lastBlendTs;
 
   // ===== Camera =====
   CameraController? _controller;
@@ -30,30 +30,22 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
   FaceDetector? _detector;
   bool _isDetecting = false;
 
-  // ===== State (public getters) =====
+  // ===== State =====
   bool _cameraOpen = true;
   bool get cameraOpen => _cameraOpen;
 
   bool _faceDetected = false;
   bool get faceDetected => _faceDetected;
 
-  double? _faceRatioValue;
-  double? get faceRatioValue => _faceRatioValue;
-
   double _ratioProgress = 0.0;
-  DateTime? _lastFaceTs;
-
-  /// القيمة المقروءة من الشاشة (0..1)
   double get ratioProgress => _ratioProgress;
 
   bool _centeredInOval = false;
   bool get centeredInOval => _centeredInOval;
 
-  /// 0..1 كلما اقتربت من المركز زادت القيمة (1.0 = في قلب المركز)
-  double _centerScore = 0.0;
+  double _centerScore = 0.0; // 0..1
   double get centerScore => _centerScore;
 
-  /// إزاحة مركز الوجه عن مركز البيضاوي بالبيكسل (للديبغ/العرض)
   Offset? _centerOffsetPx;
   Offset? get centerOffsetPx => _centerOffsetPx;
 
@@ -63,35 +55,30 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
   void _setCaptureEligible(bool v) {
     if (_captureEligible == v) return;
     _captureEligible = v;
+    debugPrint('[ELIGIBLE -> ${v ? 'YES' : 'NO'}]');
     notifyListeners();
   }
 
-  // حجم الوجه الخام raw = faceShort/imgShort (بدون clamp للأعلى)
-  static const double kRawFaceMin   = 0.32; // أبعد من هذا: اعتبره بعيد (≈ >25–30 سم)
-  static const double kRawFaceIdeal = 0.98; // هذا “القمة” ≈ 20 سم
-  static const double kRawFaceMax   = 0.99; // أقرب من هذا: اعتبره قريب جدًا (≤ ~15 سم)
-
-  /// تحديث داخلي
   set _setRatioProgress(double v) {
     _ratioProgress = v.clamp(0.0, 1.0);
     notifyListeners();
   }
 
-
+  // قياسات الإضاءة
   int _frameCount = 0;
   int _detectCounter = 0;
-
   double? _brightnessLevel; // 0..255
   double? get brightnessLevel => _brightnessLevel;
   String? _brightnessStatus;
   String? get brightnessStatus => _brightnessStatus;
 
+  // العد التنازلي
   int? _countdown;
   int? get countdown => _countdown;
-
   bool get isCountdownActive => _countdown != null && _countdown! > 0;
   bool _isSnapshotting = false;
 
+  // النتائج
   Map<String, dynamic>? _livenessResult;
   Map<String, dynamic>? get livenessResult => _livenessResult;
 
@@ -124,7 +111,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
   bool _showScreensaver = false;
   bool get showScreensaver => _showScreensaver;
 
-  // Clock animation for screensaver
+  // Clock
   final List<String> _clockPositions = ['center', 'right', 'left'];
   int _clockPosIndex = 0;
   int get clockPosIndex => _clockPosIndex;
@@ -142,64 +129,50 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
   Size _screenSize = Size.zero;
   set screenSize(Size s) => _screenSize = s;
 
-  double _estimateLuma(CameraImage image) {
-    // نختار قناة مضيئة حسب فورمات الصورة
-    final group = image.format.group;
+  // ==== إعدادات الحجم ====
+  final FaceSizeThresholds _sizeCfg;
+  FaceLivenessController({FaceSizeThresholds? sizeCfg})
+      : _sizeCfg = sizeCfg ?? FaceSizeThresholds.defaults;
 
-    // خطوات أخذ عينة خفيفة
-    final stepY = math.max(1, image.height ~/ 36);
-    final stepX = math.max(1, image.width  ~/ 64);
+  // حجم الوجه النسبي (يُحدّث كل إطار)
+  double? _sizeRaw;
+  double? get sizeRawLive => _sizeRaw;
 
-    int sum = 0, count = 0;
+  // ==== تقدير المسافة (تقريبي) ====
+  static const double _kIdealDistanceCm = 22.0;
 
-    if (group == ImageFormatGroup.bgra8888) {
-      // iOS غالباً — Plane واحد BGRA (4 بايت/بكسل)
-      final p = image.planes[0];
-      final bytes = p.bytes;
-      final stride = p.bytesPerRow; // 4*width أو أكبر
+  double? get estDistanceCm {
+    final s = _sizeRaw;
+    if (s == null || s <= 0) return null;
+    return _kIdealDistanceCm * (_sizeCfg.rawIdeal / s);
+  }
 
-      for (int r = 0; r < image.height; r += stepY) {
-        final rowStart = r * stride;
-        for (int c = 0; c < image.width; c += stepX) {
-          final idx = rowStart + c * 4;
-          final b = bytes[idx];
-          final g = bytes[idx + 1];
-          final r8 = bytes[idx + 2];
-          // تحويل إلى الإضاءة التقريبية (BT.601)
-          final luma = ((299 * r8 + 587 * g + 114 * b) / 1000).round(); // 0..255
-          sum += luma; count++;
-        }
-      }
-    } else {
-      // Android NV21/YUV420 — أول plane هو Y (إضاءة مباشرة)
-      final yPlane = image.planes.first;
-      final bytes = yPlane.bytes;
-      final stride = yPlane.bytesPerRow;
+  double? get deltaToIdealCm {
+    final d = estDistanceCm;
+    if (d == null) return null;
+    return d - _kIdealDistanceCm;
+  }
 
-      for (int r = 0; r < image.height; r += stepY) {
-        final rowStart = r * stride;
-        for (int c = 0; c < image.width; c += stepX) {
-          sum += bytes[rowStart + c]; // قيمة Y جاهزة 0..255
-          count++;
-        }
-      }
+  double? get deltaToRangeCm {
+    final s = _sizeRaw;
+    if (s == null || s <= 0) return null;
+    if (s >= _sizeCfg.rawMin && s <= _sizeCfg.rawMax) return 0.0;
+
+    final dNow = estDistanceCm!;
+    if (s < _sizeCfg.rawMin) {
+      final dWant = _kIdealDistanceCm * (_sizeCfg.rawIdeal / _sizeCfg.rawMin);
+      return dNow - dWant; // موجبة => اقترب
     }
-
-    if (count == 0) return 0.0;
-    return sum / count; // 0..255
+    final dWant = _kIdealDistanceCm * (_sizeCfg.rawIdeal / _sizeCfg.rawMax);
+    return dNow - dWant; // موجبة => ابتعد
   }
 
+  bool get tooFar => _sizeRaw != null && _sizeRaw! < _sizeCfg.rawMin;
+  bool get tooClose => _sizeRaw != null && _sizeRaw! > _sizeCfg.rawMax;
 
-  String _statusForLuma(double v) {
-    if (v < 30)  return "Very dark ❌";
-    if (v < 60)  return "Too dim ❌";
-    if (v < 100) return "Dim light ⚠️";
-    if (v < 160) return "Good lighting ✅";
-    if (v < 220) return "Excellent lighting 🌟";
-    return "Too bright ⚠️";
-  }
+  double get fitPct => (_ratioProgress.clamp(0.0, 1.0)) * 100.0;
 
-  // Lifecycle
+  // ===== Lifecycle =====
   Future<void> init() async {
     WidgetsBinding.instance.addObserver(this);
     _initDetector();
@@ -222,7 +195,6 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     super.dispose();
   }
 
-  // Handle app pause/resume
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     if (_controller == null) return;
@@ -308,7 +280,6 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
       _cameraOpen = false;
       notifyListeners();
       await _disposeCamera();
-      // _startClockMover();
     });
 
     _screensaverCountdown = kScreensaverSeconds;
@@ -316,22 +287,8 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
   }
 
   void userActivity() {
-    if (_showScreensaver) return; // تجاهل أثناء شاشة التوقف حتى نقر العودة
+    if (_showScreensaver) return;
     _resetInactivity();
-  }
-
-  void _startClockMover() {
-    _clockMoveTimer?.cancel();
-    _clockMoveTimer = Timer.periodic(const Duration(milliseconds: kClockDwellMs), (_) {
-      _clockBlink = true;
-      notifyListeners();
-      _clockBlinkTimer?.cancel();
-      _clockBlinkTimer = Timer(const Duration(milliseconds: 70), () {
-        _clockPosIndex = (_clockPosIndex + 1) % _clockPositions.length;
-        _clockBlink = false;
-        notifyListeners();
-      });
-    });
   }
 
   Future<void> exitScreensaverAndReopen() async {
@@ -345,13 +302,13 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     _isDetecting = false;
     _readyForNextImage = true;
     _faceDetected = false;
-    _faceRatioValue = null;
     _ratioProgress = 0.0;
     _brightnessLevel = null;
     _brightnessStatus = null;
     _detectCounter = 0;
     _lastFaceRect = null;
     _insideOval = false;
+    _sizeRaw = null;
     _setCaptureEligible(false);
     await _initCamera();
     _resetInactivity();
@@ -403,25 +360,22 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
   }
 
   // ===== Core vision loop =====
-
   Future<void> _onNewCameraImage(CameraImage image) async {
-    // حماية تدفق الصور
     if (!_readyForNextImage || !_cameraOpen) return;
     _readyForNextImage = false;
 
-    // تحديث آخر حجم خام للصورة
     _latestImageSize = Size(image.width.toDouble(), image.height.toDouble());
 
-    // ===== قياس الإضاءة كل N إطار =====
+    // قياس الإضاءة كل N إطار
     _frameCount = (_frameCount + 1) % kBrightnessSampleEveryN;
     if (_frameCount == 0) {
-      final luma = _estimateLuma(image); // 0..255
+      final luma = _estimateLuma(image);
       _brightnessLevel = luma;
       _brightnessStatus = _statusForLuma(luma);
-      notifyListeners(); // مهم لإظهار شريحة الإضاءة فورًا
+      notifyListeners();
     }
 
-    // ===== تقليل كلفة الكشف (decimation) =====
+    // تقليل كلفة الكشف
     _detectCounter = (_detectCounter + 1) % kDetectEveryN;
     if (_detectCounter != 0) {
       _readyForNextImage = true;
@@ -434,27 +388,33 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     _isDetecting = true;
 
     try {
-      // تجهيز الصورة للمكتبة
       final inputImage = _toInputImage(image);
       final faces = await _detector!.processImage(inputImage);
 
-      if (faces.isNotEmpty) {
-        // اختر أكبر وجه (غالبًا الأقرب)
+      // ✅ إصلاح التدفق: استخدم if/else وليس if + if + else
+      if (faces.isEmpty) {
+        _lastFaceRect = null;
+        _insideOval = false;
+        _sizeRaw = null;
+        _updateFaceDetected(false);
+        _collapseProgressFast(factor: 0.35);
+        _stopCountdown();
+      } else {
+        // اختر أكبر وجه
         final face = faces.reduce((a, b) =>
         (a.boundingBox.width * a.boundingBox.height) >
             (b.boundingBox.width * b.boundingBox.height) ? a : b);
 
-        final rect = face.boundingBox; // إحداثيات portrait
+        final rect = face.boundingBox;
         _lastFaceRect = rect;
 
         final rawW = image.width.toDouble();
         final rawH = image.height.toDouble();
 
-        // --- الحسابات المكانية بالنسبة للشاشة ---
         final bool isFront =
             _frontCamera?.lensDirection == CameraLensDirection.front;
 
-        // 1) هل الوجه بكامله داخل البيضاوي؟
+        // داخل/مركز البيضاوي
         _insideOval = _isFaceInsideOvalOnScreen(
           faceCenter: rect.center,
           imageRawSize: Size(rawW, rawH),
@@ -462,7 +422,6 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
           isFront: isFront,
         );
 
-        // 2) هل الوجه متمركز بما يكفي في قلب البيضاوي؟ (للإظهار/التشويق إن احتجت)
         _centeredInOval = _isFaceCenteredInOvalOnScreen(
           faceCenter: rect.center,
           imageRawSize: Size(rawW, rawH),
@@ -470,37 +429,39 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
           isFront: isFront,
         );
 
-
         final imgShort = math.min(rawW, rawH);
         final faceShort = math.min(rect.width, rect.height);
-        final double sizeRaw = (imgShort == 0 ? 0.0 : faceShort / imgShort); // بدون clamp للأعلى
+        final double sizeRaw = (imgShort == 0 ? 0.0 : faceShort / imgShort);
+        _sizeRaw = sizeRaw;
+
         final double sizeFactor = _sizeScoreWindowed(sizeRaw);
         final double posFactor = _positionFactor(
           faceCenterRaw: rect.center,
           imageRawSize: Size(rawW, rawH),
           screenSize: _screenSize,
           isFront: isFront,
-        ); // 0..1 (0 إذا خارج البيضاوي)
+        );
 
-        // 4) الهدف المركّب لشريط Face Fit
-        if (!_insideOval || posFactor == 0.0) {
-          // خرج الوجه من البيضاوي أو يكاد: صفّر سريعًا (إحساس حاسم وواضح)
+        // تقدّم شريط الملاءمة
+        final inFrame = _insideOval || _centerScore >= 0.22; // تساهل بسيط
+        if (!inFrame || posFactor == 0.0) {
           _setRatioProgress = 0.0;
-          notifyListeners();
         } else {
-          // داخل البيضاوي: امزج الحجم مع التمركز
-          // يمكنك وزن العوامل لو أردت (مثلاً 0.7 * size + 0.3 * pos)
           final double targetProgress = (sizeFactor * posFactor).clamp(0.0, 1.0);
           _blendProgress(targetProgress, smooth: 0.22);
         }
 
-        // 5) تحديث حالة "وجه مُكتشف" (يمكن ضبط العتبة بحسب تجربتك)
-        _updateFaceDetected(sizeFactor >= (kMinFaceRatio * 0.6));
+        // اكتشاف الوجه
+        _updateFaceDetected(sizeRaw >= _sizeCfg.rawMin * 0.75);
 
+        debugPrint('Hakim{$sizeRaw}');
+        debugPrint('rawMin: ${_sizeCfg.rawMin.toStringAsFixed(3)}');
+        debugPrint('rawMax: ${_sizeCfg.rawMax.toStringAsFixed(3)}');
+        // ✅ الأهلية تعتمد على (تمركز المركز + حجم ضمن النطاق)
         final bool eligible = _faceDetected
-            && _insideOval
-            && sizeRaw >= kRawFaceMin
-            && sizeRaw <= kRawFaceMax;
+            && inFrame
+            && sizeRaw >= _sizeCfg.rawMin
+            && sizeRaw <= _sizeCfg.rawMax;
 
         _setCaptureEligible(eligible);
 
@@ -509,14 +470,6 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
         } else {
           _stopCountdown();
         }
-
-      } else {
-        // لا توجد وجوه: هبوط سريع للشريط وإيقاف العدّاد
-        _lastFaceRect = null;
-        _insideOval = false;
-        _updateFaceDetected(false);
-        _collapseProgressFast(factor: 0.35); // صفر سريعًا
-        _stopCountdown();
       }
     } catch (_) {
       // تجاهل الأخطاء اللحظية
@@ -524,17 +477,18 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
       _isDetecting = false;
       _readyForNextImage = true;
       notifyListeners();
-      // مهلة صغيرة جدًا لمنع تشبّع حلقة الرؤية
       await Future.delayed(const Duration(milliseconds: 2));
     }
   }
+
+  // ===== تمركز/داخل البيضاوي (مُرخَّص) =====
 
   bool _isFaceCenteredInOvalOnScreen({
     required Offset faceCenter,
     required Size imageRawSize,
     required Size screenSize,
     required bool? isFront,
-    double epsilonPct = kCenterEpsilonPct, // تقبّل الانحراف
+    double epsilonPct = kCenterEpsilonPct,
   }) {
     if (screenSize == Size.zero) {
       _centerScore = 0.0;
@@ -542,7 +496,6 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
       return false;
     }
 
-    // نفس إسقاط الإحداثيات من الصورة إلى الشاشة (portrait)
     final srcW = imageRawSize.height; // portrait width
     final srcH = imageRawSize.width;  // portrait height
     final scale = math.max(screenSize.width / srcW, screenSize.height / srcH);
@@ -552,40 +505,33 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     double cx = faceCenter.dx * scale + dxPad;
     final double cy = faceCenter.dy * scale + dyPad;
 
-    // مرآة الكاميرا الأمامية
     if (isFront == true) {
       final midX = screenSize.width / 2;
       cx = 2 * midX - cx;
     }
 
-    // مركز ونصفي قطر البيضاوي على الشاشة
     final ovalCx = screenSize.width  * (0.5 + kOvalCxOffsetPct);
     final ovalCy = screenSize.height * (0.5 + kOvalCyOffsetPct);
     final ovalRx = (screenSize.width  * kOvalRxPct);
     final ovalRy = (screenSize.height * kOvalRyPct);
 
-    // إزاحة الوجه عن المركز (بيكسل)
     final offXpx = cx - ovalCx;
     final offYpx = cy - ovalCy;
     _centerOffsetPx = Offset(offXpx, offYpx);
 
-    // طبيع (normalize) الإزاحة على أنصاف الأقطار
-    final dxn = ovalRx == 0 ? 0.0 : offXpx / ovalRx; // نسبة -1..1
+    final dxn = ovalRx == 0 ? 0.0 : offXpx / ovalRx;
     final dyn = ovalRy == 0 ? 0.0 : offYpx / ovalRy;
 
-    // نصف قطر “منطقة المركز” المسموح بها كنسبة من نصف القطر الأصلي
     final rAllow = epsilonPct.clamp(0.02, 0.9);
+    final r = math.sqrt(dxn * dxn + dyn * dyn);
 
-    // المسافة المعيارية من المركز داخل جهاز إحداثي البيضاوي
-    final r = math.sqrt(dxn * dxn + dyn * dyn); // 0 عند القلب
-
-    // درجة المحاذاة: 1 عند المركز، 0 عند حد rAllow أو خارجه
     _centerScore = (1.0 - (r / rAllow)).clamp(0.0, 1.0);
-
-    // true إذا داخل “منطقة المركز”
     return r <= rAllow;
   }
 
+  // سماحية: 15% خارج الحد مقبولة، أو 3 زوايا من 4 داخل
+  static const double _kEdgeOverflowTol = 0.15; // 15% خارج الحد
+  static const double _kCornersNeeded = 3;      // 3 زوايا كفاية
 
   bool _isFaceInsideOvalOnScreen({
     required Offset faceCenter,
@@ -595,8 +541,8 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
   }) {
     if (screenSize == Size.zero) return false;
 
-    final srcW = imageRawSize.height; // portrait width
-    final srcH = imageRawSize.width;  // portrait height
+    final srcW = imageRawSize.height;
+    final srcH = imageRawSize.width;
     final scale = math.max(screenSize.width / srcW, screenSize.height / srcH);
     final dx = (screenSize.width - srcW * scale) / 2.0;
     final dy = (screenSize.height - srcH * scale) / 2.0;
@@ -604,7 +550,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     final faceRect = _lastFaceRect;
     if (faceRect == null) return false;
 
-    List<Offset> corners = [
+    final corners = <Offset>[
       faceRect.topLeft,
       faceRect.topRight,
       faceRect.bottomLeft,
@@ -613,31 +559,42 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
 
     final ovalCx = screenSize.width * (0.5 + kOvalCxOffsetPct);
     final ovalCy = screenSize.height * (0.5 + kOvalCyOffsetPct);
-    final ovalRx = (screenSize.width * kOvalRxPct) * kOvalInsideEpsilon;
-    final ovalRy = (screenSize.height * kOvalRyPct) * kOvalInsideEpsilon;
+    final ovalRx = (screenSize.width * kOvalRxPct);
+    final ovalRy = (screenSize.height * kOvalRyPct);
 
+    int insideCount = 0;
     for (var point in corners) {
       double cx = point.dx * scale + dx;
       double cy = point.dy * scale + dy;
 
-      // إذا الكاميرا أمامية نعكس X
       if (isFront == true) {
         final midX = screenSize.width / 2;
         cx = 2 * midX - cx;
       }
 
-      const double relax = 0.80;
+      // مسافة مُطبَّعة لنقطة بالنسبة للبيضاوي
+      final dxn = (cx - ovalCx) / ovalRx;
+      final dyn = (cy - ovalCy) / ovalRy;
+      final distance = dxn * dxn + dyn * dyn; // <= 1 داخل
 
-      final dxn = (cx - ovalCx) / (ovalRx / relax);
-      final dyn = (cy - ovalCy) / (ovalRy / relax);
-      final distance = dxn * dxn + dyn * dyn;
-
-      if (distance > 1.0) return false; // نقطة خارج البيضاوي
+      // اسمح بزيادة 15% خارج الحد
+      if (distance <= (1.0 + _kEdgeOverflowTol)) insideCount++;
     }
 
-    return true; // جميع الزوايا داخل البيضاوي
-  }
+    // أيضًا لو المركز داخل البيضاوي بزيادة سماحية نصفية
+    final faceCxRaw = faceRect.center;
+    double ccx = faceCxRaw.dx * scale + dx;
+    double ccy = faceCxRaw.dy * scale + dy;
+    if (isFront == true) {
+      final midX = screenSize.width / 2;
+      ccx = 2 * midX - ccx;
+    }
+    final cdxn = (ccx - ovalCx) / ovalRx;
+    final cdyn = (ccy - ovalCy) / ovalRy;
+    final centerInside = (cdxn * cdxn + cdyn * cdyn) <= (1.0 + _kEdgeOverflowTol * 0.5);
 
+    return insideCount >= _kCornersNeeded || centerInside;
+  }
 
   void _updateFaceDetected(bool detected) {
     if (detected == _faceDetected) return;
@@ -662,7 +619,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     userActivity();
     Timer.periodic(const Duration(seconds: 1), (Timer t) async {
       if (_showScreensaver) { t.cancel(); return; }
-      if (!_insideOval || !_faceDetected) { _stopCountdown(); t.cancel(); return; }
+      if (!_captureEligible) { _stopCountdown(); t.cancel(); return; }
       if (_isSnapshotting) { t.cancel(); return; }
 
       if (_countdown != null && _countdown! > 0) {
@@ -688,7 +645,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
 
   // ===== Capture & backend =====
   Future<void> _handleLivenessCheck() async {
-    if (!_insideOval || !_faceDetected) {
+    if (!_captureEligible) {
       _isSnapshotting = false;
       _readyForNextImage = true;
       _stopCountdown(force: true);
@@ -703,7 +660,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
       await _stopStreamSafely();
       await Future.delayed(const Duration(milliseconds: 80));
 
-      if (!_insideOval || !_faceDetected) {
+      if (!_captureEligible) {
         _isSnapshotting = false;
         _readyForNextImage = true;
         _stopCountdown(force: true);
@@ -716,21 +673,18 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
       _lastFaceRect = null;
       notifyListeners();
 
-      debugPrint('hiiii{$kEnableLiveness}');
       if (kEnableLiveness) {
-
         final liveJson = await _net.sendLiveness(file.path);
-        debugPrint('hakim{$liveJson}');
         _livenessResult = liveJson ?? {'error': 'Invalid response'};
-        print('livenessResponse{$_livenessResult}');
         notifyListeners();
       }
+
       if (kEnableFaceRecognition) {
         final recog = await _net.sendFaceRecognition(file.path);
-        print('recoRequest{$recog}');
         _faceRecognitionResult = recog ?? {'error': 'Invalid response'};
         notifyListeners();
       }
+
       Timer(const Duration(milliseconds: kDisplayImageMs), () async {
         if (_showScreensaver) return;
         await _resumeLivePreview();
@@ -797,92 +751,62 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
   }
 
   void _decayRatio() {
-    // إن ما في وجه، خفّض المؤشر تدريجياً نحو الصفر
     const decay = 0.85;
     _setRatioProgress = _ratioProgress * decay;
-
     if (_ratioProgress < 0.005) {
       _setRatioProgress = 0.0;
     }
   }
+
   void _updateRatio(Rect faceRect, Size imageSize) {
-    // ✅ نقيس “قُطر” الوجه بالنسبة لأقصر بُعد في الصورة (مقياس لا يتأثر بالاتجاه)
     final imgShort = math.min(imageSize.width, imageSize.height);
     final faceShort = math.min(faceRect.width, faceRect.height);
-
-    // كلما اقترب الوجه يكبر faceShort ⇒ تزيد النسبة
     final raw = (faceShort / imgShort).clamp(0.0, 1.0);
 
-    // 🎯 الهدف الذي نعتبره "ممتاز" للالتقاط (اضبطه حسب تصميمك/البيضاوي)
-    const target = 0.22; // جرّب بين 0.18 ~ 0.26
-
-    // حوّل إلى 0..1 (أعلى من الهدف يُقص للمحافظة على 1.0)
+    const target = 0.22;
     final targetProgress = (raw / target).clamp(0.0, 1.0);
 
-    // 🫧 تنعيم للاستقرار (0.15..0.30 حسب ذوقك)
     const smooth = 0.22;
-    _setRatioProgress = _ratioProgress + (targetProgress - _ratioProgress) * smooth;
+    _setRatioProgress =
+        _ratioProgress + (targetProgress - _ratioProgress) * smooth;
 
     notifyListeners();
   }
 
-  void _onFacesDetected(List<Face> faces, Size imageSize) {
-    if (faces.isEmpty) {
-      // لو لا يوجد وجه: قلل المؤشر تدريجياً نحو الصفر
-      _lastFaceTs = null;
-      _decayRatio();
-      return;
-    }
-
-    // خذ أكبر وجه (أقرب واحد للكاميرا عادةً)
-    final face = faces.reduce((a, b) =>
-    (a.boundingBox.width * a.boundingBox.height) >
-        (b.boundingBox.width * b.boundingBox.height) ? a : b);
-
-    _lastFaceTs = DateTime.now();
-    _updateRatio(face.boundingBox, imageSize);
-  }
-
-  // ===== Progress helpers (size + position) =====
-
-  /// يحسب درجة الحجم 0..1 من غير ما تتأثر باتجاه الصورة
   double _sizeScore(Rect faceRect, Size imageSize, {double target = 0.22}) {
     final imgShort = math.min(imageSize.width, imageSize.height);
     final faceShort = math.min(faceRect.width, faceRect.height);
     final raw = (faceShort / (imgShort == 0 ? 1 : imgShort)).clamp(0.0, 1.0);
-    // الهدف الذي نعتبره ممتاز للالتقاط (اضبط target حسب تصميمك)
     return (raw / target).clamp(0.0, 1.0);
   }
 
   double _smoothstep(double a, double b, double x) {
     if (a == b) return x >= b ? 1.0 : 0.0;
     final t = ((x - a) / (b - a)).clamp(0.0, 1.0);
-    return t * t * (3 - 2 * t); // منحنى S ناعم
+    return t * t * (3 - 2 * t);
   }
 
-  /// تُرجِع 0..1 مع قمة عند kRawFaceIdeal وهبوط سلس إلى 0 عند الطرفين
   double _sizeScoreWindowed(double raw) {
-    // صعود من kRawFaceMin إلى الكمال عند kRawFaceIdeal
-    final up = _smoothstep(kRawFaceMin, kRawFaceIdeal, raw);
-    // نزول من الكمال عند kRawFaceIdeal إلى 0 عند kRawFaceMax
-    final down = 1.0 - _smoothstep(kRawFaceIdeal, kRawFaceMax, raw);
-    // الدمج يعطي قمة محدة ونطاق ديناميكي ممتاز
+    double sstep(double a, double b, double x) {
+      if (a == b) return x >= b ? 1.0 : 0.0;
+      final t = ((x - a) / (b - a)).clamp(0.0, 1.0);
+      return t * t * (3 - 2 * t);
+    }
+
+    final up   = sstep(_sizeCfg.rawMin,   _sizeCfg.rawIdeal, raw);
+    final down = 1.0 - sstep(_sizeCfg.rawIdeal, _sizeCfg.rawMax,   raw);
     final peak = math.min(up, down);
     return peak.clamp(0.0, 1.0);
   }
 
-
-  /// يحسب عامل التمركز 0..1 داخل البيضاوي.
-  /// 1 في المركز، يقل تدريجياً نحو الحواف، 0 إذا خرج (distance>=1).
   double _positionFactor({
-    required Offset faceCenterRaw,   // إحداثيات من فضاء الصورة (portrait)
+    required Offset faceCenterRaw,
     required Size imageRawSize,
     required Size screenSize,
     required bool isFront,
   }) {
     if (screenSize == Size.zero) return 0.0;
 
-    // إسقاط إحداثيات الصورة على الشاشة (portrait)
     final srcW = imageRawSize.height; // portrait width
     final srcH = imageRawSize.width;  // portrait height
     final scale = math.max(screenSize.width / srcW, screenSize.height / srcH);
@@ -892,45 +816,148 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     double cx = faceCenterRaw.dx * scale + dxPad;
     final double cy = faceCenterRaw.dy * scale + dyPad;
 
-    // مرآة للكاميرا الأمامية
     if (isFront) {
       final midX = screenSize.width / 2;
       cx = 2 * midX - cx;
     }
 
-    // معلمات البيضاوي على الشاشة
     final ovalCx = screenSize.width  * (0.5 + kOvalCxOffsetPct);
     final ovalCy = screenSize.height * (0.5 + kOvalCyOffsetPct);
     final ovalRx = (screenSize.width  * kOvalRxPct);
     final ovalRy = (screenSize.height * kOvalRyPct);
 
-    // مسافة “موحدة” من مركز البيضاوي
     final dxn = (cx - ovalCx) / (ovalRx == 0 ? 1 : ovalRx);
     final dyn = (cy - ovalCy) / (ovalRy == 0 ? 1 : ovalRy);
     final r = math.sqrt(dxn * dxn + dyn * dyn);
 
-    if (r >= 1.0) return 0.0; // خارج البيضاوي
+    if (r >= 1.0) return 0.0;
 
-    // منحنى ناعم: قريب من 1 في المركز، ويهبط تدريجياً نحو الحافة
-    // اضبط p إذا أردت منحنى أدق/أكثر حدة.
     const p = 1.4;
     return math.pow((1.0 - r), p).toDouble().clamp(0.0, 1.0);
   }
 
-  /// يمزج التقدّم الحالي مع الهدف بسلاسة
+  // إعادة استخدام النسختين التي لديك:
+  double? _lumaEma;
+  double _estimateLuma(CameraImage image, {bool smooth = true}) {
+    final group = image.format.group;
+    final stepY = math.max(1, image.height ~/ 36);
+    final stepX = math.max(1, image.width  ~/ 64);
+
+    int sum = 0, count = 0;
+
+    if (group == ImageFormatGroup.bgra8888) {
+      final p = image.planes[0];
+      final bytes = p.bytes;
+      final stride = p.bytesPerRow;
+
+      for (int r = 0; r < image.height; r += stepY) {
+        final rowStart = r * stride;
+        for (int c = 0; c < image.width; c += stepX) {
+          final idx = rowStart + c * 4;
+          if (idx + 2 >= bytes.length) continue;
+          final b = bytes[idx];
+          final g = bytes[idx + 1];
+          final r8 = bytes[idx + 2];
+          final l = ((299 * r8 + 587 * g + 114 * b) / 1000).round();
+          sum += l; count++;
+        }
+      }
+    } else {
+      final y = image.planes.first;
+      final bytes = y.bytes;
+      final stride = y.bytesPerRow;
+
+      for (int r = 0; r < image.height; r += stepY) {
+        final rowStart = r * stride;
+        for (int c = 0; c < image.width; c += stepX) {
+          final idx = rowStart + c;
+          if (idx >= bytes.length) continue;
+          sum += bytes[idx];
+          count++;
+        }
+      }
+    }
+
+    final raw = (count == 0) ? 0.0 : (sum / count);
+    if (!smooth) return raw;
+    final alpha = 0.25;
+    _lumaEma = (_lumaEma == null) ? raw : (_lumaEma! + alpha * (raw - _lumaEma!));
+    return _lumaEma!.clamp(0.0, 255.0);
+  }
+
+  String _statusForLuma(double v) {
+    if (v <  30) return "Very dark ❌";
+    if (v <  60) return "Too dim ❌";
+    if (v < 100) return "Dim light ⚠️";
+    if (v < 160) return "Good lighting ✅";
+    if (v < 220) return "Excellent lighting 🌟";
+    return "Too bright ⚠️";
+  }
+
   void _blendProgress(double target, {double smooth = 0.22}) {
-    _setRatioProgress = _ratioProgress + (target - _ratioProgress) * smooth;
-    notifyListeners();
+    target = target.clamp(0.0, 1.0);
+    final now = DateTime.now();
+    final dt = (_lastBlendTs == null)
+        ? 1.0 / 60.0
+        : (now.difference(_lastBlendTs!).inMilliseconds / 1000.0)
+        .clamp(0.0, 0.25);
+    _lastBlendTs = now;
+
+    const double deadzone = 0.004;
+    if ((target - _ratioProgress).abs() < deadzone) {
+      _setRatioProgress = target;
+      return;
+    }
+
+    final s = smooth.clamp(0.0, 0.99);
+    final alpha = 1 - math.pow(1 - s, dt * 60.0);
+
+    double desired = _ratioProgress + (target - _ratioProgress) * alpha;
+
+    const double maxUnitsPerSec = 1.2;
+    final double maxStep = maxUnitsPerSec * dt;
+    final double step = (desired - _ratioProgress);
+    if (step.abs() > maxStep) {
+      desired = _ratioProgress + step.sign * maxStep;
+    }
+
+    if (desired > 0.995) desired = 1.0;
+    if (desired < 0.005) desired = 0.0;
+
+    _setRatioProgress = desired;
   }
 
-  /// خفض سريع إلى الصفر عندما يختفي الوجه أو يخرج من البيضاوي
-  void _collapseProgressFast({double factor = 0.15}) {
-    _setRatioProgress = _ratioProgress * (1.0 - factor);
-    if (_ratioProgress < 0.02) _setRatioProgress = 0.0;
-    notifyListeners();
+  void _collapseProgressFast({double factor = 0.25}) {
+    final f = factor.clamp(0.05, 0.95);
+    double next = _ratioProgress * (1.0 - f);
+    if (next < 0.02) next = 0.0;
+    _setRatioProgress = next;
   }
 
+  // Public
+  Future<void> tapNextEmployee() async {
+    _stopCountdown(force: true);
+    _isSnapshotting = false;
 
-  // Public actions
-  Future<void> tapNextEmployee() async => _resumeLivePreview();
+    _livenessResult = null;
+    _faceRecognitionResult = null;
+    _capturedFile = null;
+    _lastFaceRect = null;
+    _sizeRaw = null;
+    _ratioProgress = 0.0;
+    _insideOval = false;
+    _faceDetected = false;
+    _setCaptureEligible(false);
+
+    _showScreensaver = false;
+    _cameraOpen = true;
+
+    notifyListeners();
+
+    if (_controller == null || !_controller!.value.isInitialized) {
+      await _initCamera();
+    } else {
+      await _startStreamSafely();
+    }
+  }
 }
