@@ -37,7 +37,7 @@ class Screensaver extends StatelessWidget {
                 duration: const Duration(milliseconds: 80),
                 opacity: blink ? 0 : 1,
                 child: Container(
-                  margin: const EdgeInsets.only(top: 18),
+                  margin: const EdgeInsets.only(top: 60),
                   padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                   // decoration: BoxDecoration(
                   //   color: Colors.white.withOpacity(.08),

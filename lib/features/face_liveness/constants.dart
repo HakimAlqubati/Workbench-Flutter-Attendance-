@@ -102,7 +102,7 @@ class FaceSizeThresholds {
 
   /// إعدادات افتراضية مناسبة لمعظم الأجهزة (عدّل حسب تجربتك)
   static const FaceSizeThresholds defaults = FaceSizeThresholds(
-    rawMin: 0.40,   // بعيد
+    rawMin: 0.20,   // بعيد
     rawIdeal: 0.22, // مثالي
     rawMax: 0.50,   // قريب جداً
   );

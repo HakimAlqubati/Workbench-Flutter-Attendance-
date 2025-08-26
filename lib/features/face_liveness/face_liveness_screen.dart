@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:my_app/features/face_liveness/controllers/face_liveness_controller.dart';
 
 import 'package:my_app/features/face_liveness/painters/frame_glow_painter.dart';
@@ -21,25 +22,76 @@ class FaceLivenessScreen extends StatefulWidget {
 }
 
 class _FaceLivenessScreenState extends State<FaceLivenessScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late final FaceLivenessController c;
   late final AnimationController glowCtrl;
+
+  bool _isFullscreen = false;
+
+  // ===== إدارة وضع ملء الشاشة =====
+  Future<void> _enterFullscreen() async {
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
+    // هذه دالة sync (ترجع void) — لا تسبقها await
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      systemNavigationBarColor: Colors.black,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ));
+    if (mounted) setState(() => _isFullscreen = true);
+  }
+
+  Future<void> _exitFullscreen({bool silent = false}) async {
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    // أيضًا بدون await
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      systemNavigationBarColor: Colors.black,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ));
+    if (mounted) {
+      if (silent) {
+        _isFullscreen = false; // بدون setState في وضع silent
+      } else {
+        setState(() => _isFullscreen = false);
+      }
+    }
+  }
+
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+
     c = FaceLivenessController()..init();
     glowCtrl = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
+
+    // ابدأ الشاشة بوضعية طبيعية (غير ممتلئة)
+    _exitFullscreen(silent: true);
   }
 
   @override
   void dispose() {
+    // ارجاع الوضع لطبيعته عند مغادرة الشاشة
+    _exitFullscreen(silent: true);
+    WidgetsBinding.instance.removeObserver(this);
+
     glowCtrl.dispose();
     c.disposeAll();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // عند استئناف التطبيق؛ إن لم نكن في ملء الشاشة نعيد الحواف
+    if (state == AppLifecycleState.resumed && !_isFullscreen) {
+      _exitFullscreen(silent: true);
+    }
   }
 
   @override
@@ -89,10 +141,10 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
                 ),
               ),
 
-              // ===== HUD: المسافة المتبقية لايف =====
+              // ===== HUD: المسافة المتبقية لايف (اختياري) =====
               // if (c.cameraOpen && c.capturedFile == null)
               //   Positioned(
-              //     top: MediaQuery.of(context).size.height * 0.12 + 100, // لتجنّب تداخل البانرز
+              //     top: MediaQuery.of(context).size.height * 0.12 + 100,
               //     left: 16,
               //     right: 16,
               //     child: _buildDistanceHud(context),
@@ -145,8 +197,8 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
 
     // اللون النشط للبيضاوي
     final Color ovalActiveColor = c.captureEligible
-        ? const Color(0xff0fd86e)   // ✅ جاهز
-        : const Color(0xffffb74d);  // ⚠️ داخل الإطار لكن غير مؤهل بعد
+        ? const Color(0xff0fd86e) // ✅ جاهز
+        : const Color(0xffffb74d); // ⚠️ داخل الإطار لكن غير مؤهل بعد
 
     return Stack(
       children: [
@@ -229,7 +281,7 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
           )
         // ⚠️ خلاف ذلك: رسالة قصيرة
         else if (c.cameraOpen && !c.captureEligible)
-// نظهر التوجيه حتى لو خرجت الزوايا قليلاً
+        // نظهر التوجيه حتى لو خرجت الزوايا قليلاً
           Positioned(
             bottom: MediaQuery.of(context).size.height * 0.18,
             left: 0,
@@ -237,9 +289,9 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
             child: Center(
               child: Text(
                 c.tooFar
-                    ? "Move In"        // بعيد: اقترب
+                    ? "Move In" // بعيد: اقترب
                     : (c.tooClose
-                    ? "Move Back"  // قريب جدًا: ابتعد
+                    ? "Move Back" // قريب جدًا: ابتعد
                     : "Align Center"), // داخل النطاق لكن غير متمركز بما يكفي
                 style: TextStyle(
                   fontSize: MediaQuery.of(context).size.width * 0.08,
@@ -247,7 +299,10 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
                   color: Colors.amberAccent,
                   decoration: TextDecoration.none,
                   shadows: const [
-                    Shadow(color: Colors.black54, blurRadius: 8, offset: Offset(0, 3)),
+                    Shadow(
+                        color: Colors.black54,
+                        blurRadius: 8,
+                        offset: Offset(0, 3)),
                   ],
                 ),
               ),
@@ -286,7 +341,8 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.badge_rounded, color: Colors.white, size: 20),
+                      const Icon(Icons.badge_rounded,
+                          color: Colors.white, size: 20),
                       const SizedBox(width: 8),
                       Flexible(
                         child: Text(
@@ -295,6 +351,7 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
                           overflow: TextOverflow.fade,
                           style: const TextStyle(
                             color: Color(0xffd9ffe9),
+                            decoration: TextDecoration.none,
                             fontWeight: FontWeight.w800,
                             fontSize: 14.5,
                             letterSpacing: .2,
@@ -350,11 +407,13 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
                   opacity: 0.14,
                   border: true,
                   radius: 999,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.timer_outlined, size: 16, color: Color(0xff0fd86e)),
+                      const Icon(Icons.timer_outlined,
+                          size: 16, color: Color(0xff0fd86e)),
                       const SizedBox(width: 6),
                       Text(
                         '${c.screensaverCountdown}',
@@ -371,6 +430,21 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
             ],
           ),
         ),
+
+        // زر Full Screen أعلى اليمين — يظهر فقط إذا لم نكن في وضع ملء الشاشة
+        if (!_isFullscreen)
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 12,
+            right: 12,
+            child: IconButton(
+              icon: const Icon(Icons.fullscreen, color: Colors.white, size: 28),
+              style: ButtonStyle(
+                backgroundColor: WidgetStateProperty.all(Colors.black45),
+                shape: WidgetStateProperty.all(const CircleBorder()),
+              ),
+              onPressed: _enterFullscreen,
+            ),
+          ),
       ],
     );
   }
@@ -387,7 +461,8 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
 
     if (dist == null) {
       line1 = 'Distance: --';
-      line2 = 'Fit: ${c.fitPct.toStringAsFixed(0)}%  •  Center: ${(center * 100).toStringAsFixed(0)}%';
+      line2 =
+      'Fit: ${c.fitPct.toStringAsFixed(0)}%  •  Center: ${(center * 100).toStringAsFixed(0)}%';
     } else {
       String dir;
       if (dRange == null || dRange <= 0.0) {
@@ -401,7 +476,8 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
       }
 
       line1 = '≈ ${dist.toStringAsFixed(0)} cm   •   $dir';
-      line2 = 'Fit: ${c.fitPct.toStringAsFixed(0)}%  •  Center: ${(center * 100).toStringAsFixed(0)}%';
+      line2 =
+      'Fit: ${c.fitPct.toStringAsFixed(0)}%  •  Center: ${(center * 100).toStringAsFixed(0)}%';
     }
 
     return Center(
@@ -412,7 +488,8 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
           opacity: .18,
           radius: 16,
           border: true,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding:
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -460,13 +537,16 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
             opacity: .18,
             radius: 16,
             border: true,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
                   ok ? Icons.verified_rounded : Icons.error_rounded,
-                  color: ok ? const Color(0xff0fd86e) : const Color(0xffff4d67),
+                  color: ok
+                      ? const Color(0xff0fd86e)
+                      : const Color(0xffff4d67),
                   size: 22,
                 ),
                 const SizedBox(width: 8),
@@ -476,7 +556,9 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
                     softWrap: true,
                     overflow: TextOverflow.fade,
                     style: TextStyle(
-                      color: ok ? const Color(0xffd9ffe9) : const Color(0xffffe2e8),
+                      color: ok
+                          ? const Color(0xffd9ffe9)
+                          : const Color(0xffffe2e8),
                       fontWeight: FontWeight.w800,
                       fontSize: 14.5,
                       letterSpacing: .2,
@@ -526,14 +608,10 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
 
     final bool found = m['found'] == true;
 
-    final name = m['name'] ??
-        j['employee']?['name'] ??
-        j['name'] ??
-        'Unknown';
+    final name =
+        m['name'] ?? j['employee']?['name'] ?? j['name'] ?? 'Unknown';
 
-    final id = m['employee_id'] ??
-        j['employee']?['id'] ??
-        j['id'];
+    final id = m['employee_id'] ?? j['employee']?['id'] ?? j['id'];
 
     final score = m['score'] ?? j['score'] ?? j['similarity'];
 

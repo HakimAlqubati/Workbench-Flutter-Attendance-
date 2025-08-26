@@ -39,8 +39,8 @@ class _FloatingLogoState extends State<FloatingLogo> with SingleTickerProviderSt
             child: Opacity(
               opacity: opacity!,
               child: Center(
-                child: Image.network(
-                  'https://nltworkbench.com/storage/logo/default-wb.png',
+                child: Image.asset(
+                  'assets/icon/default-wb.png',
                   width: math.min(size.width * .6, 420),
                   filterQuality: FilterQuality.high,
                 ),

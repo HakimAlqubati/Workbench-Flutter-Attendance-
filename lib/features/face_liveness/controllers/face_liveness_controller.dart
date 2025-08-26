@@ -459,7 +459,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
         debugPrint('rawMax: ${_sizeCfg.rawMax.toStringAsFixed(3)}');
         // ✅ الأهلية تعتمد على (تمركز المركز + حجم ضمن النطاق)
         final bool eligible = _faceDetected
-            && inFrame
+            && _insideOval
             && sizeRaw >= _sizeCfg.rawMin
             && sizeRaw <= _sizeCfg.rawMax;
 
@@ -488,7 +488,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     required Size imageRawSize,
     required Size screenSize,
     required bool? isFront,
-    double epsilonPct = kCenterEpsilonPct,
+    double epsilonPct = 0.05,
   }) {
     if (screenSize == Size.zero) {
       _centerScore = 0.0;
@@ -530,8 +530,8 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
   }
 
   // سماحية: 15% خارج الحد مقبولة، أو 3 زوايا من 4 داخل
-  static const double _kEdgeOverflowTol = 0.15; // 15% خارج الحد
-  static const double _kCornersNeeded = 3;      // 3 زوايا كفاية
+  static const double _kEdgeOverflowTol = 0.22; // 15% خارج الحد
+  static const double _kCornersNeeded = 4;      // 3 زوايا كفاية
 
   bool _isFaceInsideOvalOnScreen({
     required Offset faceCenter,
@@ -592,6 +592,8 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     final cdxn = (ccx - ovalCx) / ovalRx;
     final cdyn = (ccy - ovalCy) / ovalRy;
     final centerInside = (cdxn * cdxn + cdyn * cdyn) <= (1.0 + _kEdgeOverflowTol * 0.5);
+
+    return insideCount >= _kCornersNeeded && centerInside; // كل الزوايا + المركز داخل
 
     return insideCount >= _kCornersNeeded || centerInside;
   }
