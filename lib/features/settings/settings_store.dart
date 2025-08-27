@@ -3,15 +3,15 @@ import 'package:my_app/features/face_liveness/constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// مفاتيح SharedPreferences
-const _kKeyCountdownSeconds   = 'settings.countdown_seconds';
+const _kKeyCountdownSeconds = 'settings.countdown_seconds';
 const _kKeyScreensaverSeconds = 'settings.screensaver_seconds';
-const _kKeyOvalRxPct          = 'settings.oval_rx_pct';
-const _kKeyOvalRyPct          = 'settings.oval_ry_pct';
+const _kKeyOvalRxPct = 'settings.oval_rx_pct';
+const _kKeyOvalRyPct = 'settings.oval_ry_pct';
 const _kKeyEnableFaceRecognition = 'settings.enable_face_recognition';
 
 /// القيم الافتراضية
-const _kDefaultCountdownSeconds   = 5;
-const _kDefaultScreensaverSeconds = 59;
+const _kDefaultCountdownSeconds = 1;
+const _kDefaultScreensaverSeconds = 30;
 const _kDefaultOvalRxPct = kDefaultOvalRxPct;
 const _kDefaultOvalRyPct = kDefaultOvalRyPct;
 const _kDefaultEnableFaceRecognition = false;
@@ -30,7 +30,7 @@ class AppSettings {
     required this.ovalRxPct,
     required this.ovalRyPct,
     required this.enableFaceRecognition,
-    required this.baseUrl
+    required this.baseUrl,
   });
 
   AppSettings copyWith({
@@ -46,7 +46,8 @@ class AppSettings {
       screensaverSeconds: screensaverSeconds ?? this.screensaverSeconds,
       ovalRxPct: ovalRxPct ?? this.ovalRxPct,
       ovalRyPct: ovalRyPct ?? this.ovalRyPct,
-      enableFaceRecognition: enableFaceRecognition ?? this.enableFaceRecognition,
+      enableFaceRecognition:
+          enableFaceRecognition ?? this.enableFaceRecognition,
       baseUrl: baseUrl ?? this.baseUrl,
     );
   }
@@ -64,7 +65,7 @@ class SettingsStore {
       ovalRxPct: _kDefaultOvalRxPct,
       ovalRyPct: _kDefaultOvalRyPct,
       enableFaceRecognition: _kDefaultEnableFaceRecognition,
-        baseUrl: 'http://47.130.152.211:5000'
+      baseUrl: 'https://47.130.152.211:5000',
     ),
   );
 
@@ -74,12 +75,15 @@ class SettingsStore {
     _prefs ??= await SharedPreferences.getInstance();
     final base = _prefs?.getString('baseUrl') ?? 'http://47.130.152.211:5000';
 
-
-    final countdown = _prefs!.getInt(_kKeyCountdownSeconds) ?? _kDefaultCountdownSeconds;
-    final saver     = _prefs!.getInt(_kKeyScreensaverSeconds) ?? _kDefaultScreensaverSeconds;
-    final rx        = _prefs!.getDouble(_kKeyOvalRxPct) ?? _kDefaultOvalRxPct;
-    final ry        = _prefs!.getDouble(_kKeyOvalRyPct) ?? _kDefaultOvalRyPct;
-    final faceRec   = _prefs!.getBool(_kKeyEnableFaceRecognition) ?? _kDefaultEnableFaceRecognition;
+    final countdown =
+        _prefs!.getInt(_kKeyCountdownSeconds) ?? _kDefaultCountdownSeconds;
+    final saver =
+        _prefs!.getInt(_kKeyScreensaverSeconds) ?? _kDefaultScreensaverSeconds;
+    final rx = _prefs!.getDouble(_kKeyOvalRxPct) ?? _kDefaultOvalRxPct;
+    final ry = _prefs!.getDouble(_kKeyOvalRyPct) ?? _kDefaultOvalRyPct;
+    final faceRec =
+        _prefs!.getBool(_kKeyEnableFaceRecognition) ??
+        _kDefaultEnableFaceRecognition;
 
     notifier.value = AppSettings(
       countdownSeconds: countdown,
@@ -118,7 +122,6 @@ class SettingsStore {
     notifier.value = notifier.value.copyWith(ovalRyPct: ry);
   }
 
-
   String baseUrl = 'http://47.130.152.211:5000';
 
   Future<void> setBaseUrl(String url) async {
@@ -126,5 +129,4 @@ class SettingsStore {
     await _prefs?.setString('baseUrl', url);
     notifier.value = notifier.value.copyWith(baseUrl: url);
   }
-
 }

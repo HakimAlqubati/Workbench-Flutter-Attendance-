@@ -32,24 +32,28 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
   Future<void> _enterFullscreen() async {
     await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
     // هذه دالة sync (ترجع void) — لا تسبقها await
-    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      systemNavigationBarColor: Colors.black,
-      statusBarIconBrightness: Brightness.light,
-      systemNavigationBarIconBrightness: Brightness.light,
-    ));
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Colors.black,
+        statusBarIconBrightness: Brightness.light,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+    );
     if (mounted) setState(() => _isFullscreen = true);
   }
 
   Future<void> _exitFullscreen({bool silent = false}) async {
     await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     // أيضًا بدون await
-    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      systemNavigationBarColor: Colors.black,
-      statusBarIconBrightness: Brightness.light,
-      systemNavigationBarIconBrightness: Brightness.light,
-    ));
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Colors.black,
+        statusBarIconBrightness: Brightness.light,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+    );
     if (mounted) {
       if (silent) {
         _isFullscreen = false; // بدون setState في وضع silent
@@ -58,7 +62,6 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
       }
     }
   }
-
 
   @override
   void initState() {
@@ -179,26 +182,28 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
   Widget _buildCameraUI(BuildContext context) {
     final cam = c.controller;
 
-    final Widget basePreview = (c.capturedFile != null)
-        ? Transform(
-      alignment: Alignment.center,
-      transform: Matrix4.identity()..rotateY(math.pi),
-      child: ClipPath(
-        clipper: OvalClipper(MediaQuery.of(context).size),
-        child: Image.file(
-          File(c.capturedFile!.path),
-          fit: BoxFit.cover,
-        ),
-      ),
-    )
-        : (cam != null && cam.value.isInitialized)
-        ? CameraPreviewCover(controller: cam)
-        : const ColoredBox(color: Colors.black);
+    final Widget basePreview =
+        (c.capturedFile != null)
+            ? Transform(
+              alignment: Alignment.center,
+              transform: Matrix4.identity()..rotateY(math.pi),
+              child: ClipPath(
+                clipper: OvalClipper(MediaQuery.of(context).size),
+                child: Image.file(
+                  File(c.capturedFile!.path),
+                  fit: BoxFit.cover,
+                ),
+              ),
+            )
+            : (cam != null && cam.value.isInitialized)
+            ? CameraPreviewCover(controller: cam)
+            : const ColoredBox(color: Colors.black);
 
     // اللون النشط للبيضاوي
-    final Color ovalActiveColor = c.captureEligible
-        ? const Color(0xff0fd86e) // ✅ جاهز
-        : const Color(0xffffb74d); // ⚠️ داخل الإطار لكن غير مؤهل بعد
+    final Color ovalActiveColor =
+        c.captureEligible
+            ? const Color(0xff0fd86e) // ✅ جاهز
+            : const Color(0xffffb74d); // ⚠️ داخل الإطار لكن غير مؤهل بعد
 
     return Stack(
       children: [
@@ -281,7 +286,7 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
           )
         // ⚠️ خلاف ذلك: رسالة قصيرة
         else if (c.cameraOpen && !c.captureEligible)
-        // نظهر التوجيه حتى لو خرجت الزوايا قليلاً
+          // نظهر التوجيه حتى لو خرجت الزوايا قليلاً
           Positioned(
             bottom: MediaQuery.of(context).size.height * 0.18,
             left: 0,
@@ -291,18 +296,19 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
                 c.tooFar
                     ? "Move In" // بعيد: اقترب
                     : (c.tooClose
-                    ? "Move Back" // قريب جدًا: ابتعد
-                    : "Align Center"), // داخل النطاق لكن غير متمركز بما يكفي
+                        ? "Move Back" // قريب جدًا: ابتعد
+                        : "Align Center"), // داخل النطاق لكن غير متمركز بما يكفي
                 style: TextStyle(
                   fontSize: MediaQuery.of(context).size.width * 0.08,
                   fontWeight: FontWeight.w600,
-                  color: Colors.amberAccent,
+                  color: Colors.white,
                   decoration: TextDecoration.none,
                   shadows: const [
                     Shadow(
-                        color: Colors.black54,
-                        blurRadius: 8,
-                        offset: Offset(0, 3)),
+                      color: Colors.black54,
+                      blurRadius: 8,
+                      offset: Offset(0, 3),
+                    ),
                   ],
                 ),
               ),
@@ -341,8 +347,11 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.badge_rounded,
-                          color: Colors.white, size: 20),
+                      const Icon(
+                        Icons.badge_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
                       const SizedBox(width: 8),
                       Flexible(
                         child: Text(
@@ -407,13 +416,18 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
                   opacity: 0.14,
                   border: true,
                   radius: 999,
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.timer_outlined,
-                          size: 16, color: Color(0xff0fd86e)),
+                      const Icon(
+                        Icons.timer_outlined,
+                        size: 16,
+                        color: Color(0xff0fd86e),
+                      ),
                       const SizedBox(width: 6),
                       Text(
                         '${c.screensaverCountdown}',
@@ -462,7 +476,7 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
     if (dist == null) {
       line1 = 'Distance: --';
       line2 =
-      'Fit: ${c.fitPct.toStringAsFixed(0)}%  •  Center: ${(center * 100).toStringAsFixed(0)}%';
+          'Fit: ${c.fitPct.toStringAsFixed(0)}%  •  Center: ${(center * 100).toStringAsFixed(0)}%';
     } else {
       String dir;
       if (dRange == null || dRange <= 0.0) {
@@ -477,7 +491,7 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
 
       line1 = '≈ ${dist.toStringAsFixed(0)} cm   •   $dir';
       line2 =
-      'Fit: ${c.fitPct.toStringAsFixed(0)}%  •  Center: ${(center * 100).toStringAsFixed(0)}%';
+          'Fit: ${c.fitPct.toStringAsFixed(0)}%  •  Center: ${(center * 100).toStringAsFixed(0)}%';
     }
 
     return Center(
@@ -488,8 +502,7 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
           opacity: .18,
           radius: 16,
           border: true,
-          padding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -537,16 +550,13 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
             opacity: .18,
             radius: 16,
             border: true,
-            padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
                   ok ? Icons.verified_rounded : Icons.error_rounded,
-                  color: ok
-                      ? const Color(0xff0fd86e)
-                      : const Color(0xffff4d67),
+                  color: ok ? const Color(0xff0fd86e) : const Color(0xffff4d67),
                   size: 22,
                 ),
                 const SizedBox(width: 8),
@@ -556,9 +566,10 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
                     softWrap: true,
                     overflow: TextOverflow.fade,
                     style: TextStyle(
-                      color: ok
-                          ? const Color(0xffd9ffe9)
-                          : const Color(0xffffe2e8),
+                      color:
+                          ok
+                              ? const Color(0xffd9ffe9)
+                              : const Color(0xffffe2e8),
                       fontWeight: FontWeight.w800,
                       fontSize: 14.5,
                       letterSpacing: .2,
@@ -604,12 +615,11 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
     if (j['error'] != null) return '❌ (${j['error']})';
 
     final Map<String, dynamic> m =
-    (j['match'] is Map) ? Map<String, dynamic>.from(j['match']) : {};
+        (j['match'] is Map) ? Map<String, dynamic>.from(j['match']) : {};
 
     final bool found = m['found'] == true;
 
-    final name =
-        m['name'] ?? j['employee']?['name'] ?? j['name'] ?? 'Unknown';
+    final name = m['name'] ?? j['employee']?['name'] ?? j['name'] ?? 'Unknown';
 
     final id = m['employee_id'] ?? j['employee']?['id'] ?? j['id'];
 
