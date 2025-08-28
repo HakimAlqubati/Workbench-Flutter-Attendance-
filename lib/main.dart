@@ -22,11 +22,16 @@ class AppWatermark extends StatelessWidget {
       child: Center(
         child: Opacity(
           opacity: 0.06, // خفيفة وغير مزعجة
-          child: Image.network(
-            'https://nltworkbench.com/storage/logo/default-wb.png',
+          child: Image.asset(
+            'assets/icon/default-wb.png',
             width: 280,
             fit: BoxFit.contain,
           ),
+          // child: Image.network(
+          //   'https://nltworkbench.com/storage/logo/default-wb.png',
+          //   width: 280,
+          //   fit: BoxFit.contain,
+          // ),
         ),
       ),
     );
@@ -82,9 +87,9 @@ class _SplashGateState extends State<SplashGate> {
     if (!mounted) return;
 
     if (session != null && session.token.isNotEmpty) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
+      Navigator.of(
+        context,
+      ).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
     } else {
       Navigator.of(context).pushReplacementNamed('/login');
     }
@@ -105,8 +110,38 @@ class _SplashGateState extends State<SplashGate> {
   }
 }
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this); // إضافة مراقب دورة الحياة
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this); // إزالة المراقب
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    print('AppLifecycleState: $state'); // لتتبع الحالة
+    if (state == AppLifecycleState.resumed) {
+      // عند العودة إلى التطبيق من الخلفية
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        '/', // الشاشة الرئيسية
+        (Route<dynamic> route) => false, // إزالة جميع الشاشات الأخرى
+      );
+    }
+  }
 
   void _openCamera(BuildContext context) {
     Navigator.push(
@@ -122,20 +157,21 @@ class HomeScreen extends StatelessWidget {
   Future<void> _logout(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Confirm Logout'),
-        content: const Text('Are you sure you want to log out?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Confirm Logout'),
+            content: const Text('Are you sure you want to log out?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Logout'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Logout'),
-          ),
-        ],
-      ),
     );
 
     if (confirmed != true) return;
@@ -146,9 +182,9 @@ class HomeScreen extends StatelessWidget {
     if (!context.mounted) return;
 
     Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('You have been logged out')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('You have been logged out')));
   }
 
   @override
@@ -172,7 +208,6 @@ class HomeScreen extends StatelessWidget {
             minimum: const EdgeInsets.all(16),
             child: Column(
               children: [
-
                 const SizedBox(height: 16),
 
                 // أزرار كبيرة باستخدام ElevatedButtonTheme من ثيمك
@@ -236,9 +271,9 @@ class _BigActionButton extends StatelessWidget {
         children: [
           // لا تثبّت اللون حتى يأخذه من الثيم/الزر تلقائيًا
           Icon(icon, size: 36),
+
           // لو تبغى لونًا ثابتًا عالي التباين، استخدم التالي بدل السطر أعلاه:
           // Icon(icon, size: 36, color: cs.onPrimary),
-
           const SizedBox(height: 10),
           Text(
             title,

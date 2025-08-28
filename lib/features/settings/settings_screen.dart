@@ -13,6 +13,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  late final GlobalKey<FormState> _formKey;
   late final TextEditingController _countdownCtrl;
   late final TextEditingController _screensaverCtrl;
 
@@ -22,9 +23,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
+    _formKey = GlobalKey<FormState>();
     final s = SettingsStore.I.value;
     _countdownCtrl = TextEditingController(text: s.countdownSeconds.toString());
-    _screensaverCtrl = TextEditingController(text: s.screensaverSeconds.toString());
+    _screensaverCtrl = TextEditingController(
+      text: s.screensaverSeconds.toString(),
+    );
     ovalRx = s.ovalRxPct;
     ovalRy = s.ovalRyPct;
   }
@@ -49,22 +53,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _save() async {
+    FocusScope.of(context).unfocus();
+    // ✅ الخطوة 4: التحقق من صحة الفورم قبل الحفظ
+    if (!_formKey.currentState!.validate()) {
+      // إذا كانت هناك حقول فارغة، لا تقم بالحفظ
+      return;
+    }
     final cd = int.tryParse(_countdownCtrl.text.trim()) ?? 5;
-    final sv = (int.tryParse(_screensaverCtrl.text.trim()) ?? 30).clamp(15, 30).toInt();
+    final sv =
+        (int.tryParse(_screensaverCtrl.text.trim()) ?? 59)
+            .clamp(15, 59)
+            .toInt();
 
     await SettingsStore.I.setCountdownSeconds(cd);
     await SettingsStore.I.setScreensaverSeconds(sv);
     await SettingsStore.I.setOvalRxPct(ovalRx);
     await SettingsStore.I.setOvalRyPct(ovalRy);
 
-
-
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Settings saved successfully')),
     );
 
-    Navigator.pushNamed(context, '/face-liveness');
+    // Navigator.pushNamed(context, '/face-liveness');
+    Navigator.pop(context);
   }
 
   Widget _numberField({
@@ -74,6 +86,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     String? hint,
     bool decimal = false,
     List<TextInputFormatter>? formatters,
+    String? Function(String?)? validator,
   }) {
     return Card(
       elevation: 1,
@@ -87,10 +100,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: Row(
           children: [
             Expanded(
-              child: TextField(
+              child: TextFormField(
                 controller: controller,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: formatters ??
+                validator: validator,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters:
+                    formatters ??
                     <TextInputFormatter>[
                       FilteringTextInputFormatter.allow(
                         RegExp(decimal ? r'^\d*\.?\d{0,6}' : r'^\d*'),
@@ -108,10 +125,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             if (suffix != null)
-              Text(
-                suffix,
-                style: const TextStyle(color: Colors.white70),
-              ),
+              Text(suffix, style: const TextStyle(color: Colors.white70)),
           ],
         ),
       ),
@@ -189,28 +203,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
         padding: const EdgeInsets.all(16),
         child: ListView(
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: _numberField(
-                    label: 'Countdown',
-                    controller: _countdownCtrl,
-                    // suffix: 'sec',
-                    hint: 'Default: 5',
-                    decimal: false,
+            Form(
+              key: _formKey,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _numberField(
+                      label: 'Countdown',
+                      controller: _countdownCtrl,
+                      // suffix: 'sec',
+                      hint: 'Default: 5',
+                      decimal: false,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'A value is required';
+                        }
+                        return null;
+                      },
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _numberField(
-                    label: 'Screensaver',
-                    controller: _screensaverCtrl,
-                    // suffix: 'sec',
-                    hint: 'Default: 59 (min: 15)',
-                    decimal: false,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _numberField(
+                      label: 'Screensaver',
+                      controller: _screensaverCtrl,
+                      // suffix: 'sec',
+                      hint: 'Default: 59 (min: 15)',
+                      decimal: false,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'A value is required';
+                        }
+                        return null;
+                      },
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
 
             const SizedBox(height: 12),
@@ -241,7 +270,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
             ),
 
-
             const SizedBox(height: 12),
             ElevatedButton.icon(
               onPressed: _save,
@@ -251,7 +279,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 backgroundColor: primaryColor,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
             ),
 
@@ -270,7 +300,10 @@ class RangeTextInputFormatter extends TextInputFormatter {
   RangeTextInputFormatter({required this.min, required this.max});
 
   @override
-  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
     final text = newValue.text;
     if (text.isEmpty || text == ".") return newValue;
 
