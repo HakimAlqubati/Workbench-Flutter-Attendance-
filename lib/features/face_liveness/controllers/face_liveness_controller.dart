@@ -18,6 +18,7 @@ import '../services/network_service.dart';
 class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver {
   // ===== Dependencies / Services =====
   final LivenessNetworkService _net = LivenessNetworkService();
+  int _warmUpFrames = 0;
 
   DateTime? _lastBlendTs;
 
@@ -111,6 +112,22 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
   bool _showScreensaver = false;
   bool get showScreensaver => _showScreensaver;
 
+  // ===== Waiting state (لشاشة الانتظار فوق الصورة) =====
+  bool _waiting = false;
+  bool get waiting => _waiting;
+
+  int _captureSeq = 0;        // token متزايد لكل لقطة
+  int? _activeCaptureSeq;     // token الحالي قيد الانتظار
+
+  String _waitMessage = '';
+  String get waitMessage => _waitMessage;
+
+  bool get livenessPending =>
+      kEnableLiveness && _waiting && (_livenessResult == null);
+  bool get recognitionPending =>
+      kEnableFaceRecognition && _waiting && (_faceRecognitionResult == null);
+
+
   // Clock
   final List<String> _clockPositions = ['center', 'right', 'left'];
   int _clockPosIndex = 0;
@@ -203,6 +220,27 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     } else if (state == AppLifecycleState.resumed) {
       if (!_showScreensaver) await _startStreamSafely();
     }
+  }
+
+  Future<void> _startDisplayAndResume({required int seq}) async {
+    // أبقِ الصورة معروضة لهذه المدة (حتى يقرأ المستخدم البانرات)
+    await Future.delayed(Duration(milliseconds: kDisplayImageMs));
+
+    // لا ترجع إذا تغيّر السياق أو تغيّر الـ token
+    if (_showScreensaver) return;
+    if (_activeCaptureSeq != seq) return;
+
+    await _resumeLivePreview();
+  }
+
+  // زر التخطي من الواجهة
+  Future<void> skipWaiting() async {
+    if (!_waiting) return;
+    final seq = _activeCaptureSeq;
+    if (seq == null) return;
+    _waiting = false;
+    notifyListeners();
+    await _startDisplayAndResume(seq: seq);
   }
 
   // ===== Init parts =====
@@ -346,6 +384,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
   }
 
   Future<void> _resumeLivePreview() async {
+    _resetInactivity();
     _capturedFile = null;
     _livenessResult = null;
     _faceRecognitionResult = null;
@@ -354,6 +393,10 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     _readyForNextImage = true;
     _insideOval = false;
     _ratioProgress = 0.0;
+
+    _warmUpFrames = 12; // ⬅️ تجاهل أول 12 إطار بعد الرجوع
+
+
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 120));
     await _startStreamSafely();
@@ -361,6 +404,12 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
 
   // ===== Core vision loop =====
   Future<void> _onNewCameraImage(CameraImage image) async {
+    if (_warmUpFrames > 0) {
+      _warmUpFrames--;
+      _readyForNextImage = true;
+      return;
+    }
+
     if (!_readyForNextImage || !_cameraOpen) return;
     _readyForNextImage = false;
 
@@ -656,6 +705,11 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     }
 
     if (_controller == null || !_controller!.value.isInitialized) return;
+
+    // token لهذه اللقطة
+    final int seq = ++_captureSeq;
+    _activeCaptureSeq = seq;
+
     try {
       _readyForNextImage = false;
       _isDetecting = false;
@@ -670,30 +724,94 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
         return;
       }
 
+      // 1) التقط الصورة واعرضها فورًا
       final file = await _controller!.takePicture();
       _capturedFile = file;
       _lastFaceRect = null;
+      _livenessResult = null;
+      _faceRecognitionResult = null;
+
+      // ✅ أعِد تشغيل عدّاد الـ screensaver الآن (من الصفر)
+      _resetInactivity();
+
+      // فعّل شاشة الانتظار فوق الصورة
+      _waiting = true;
+      _waitMessage = '';
       notifyListeners();
 
+      // 2) أرسل المهام بالتوازي
+      final futures = <Future<void>>[];
+
       if (kEnableLiveness) {
-        final liveJson = await _net.sendLiveness(file.path);
-        _livenessResult = liveJson ?? {'error': 'Invalid response'};
-        notifyListeners();
+        futures.add(
+          _net.sendLiveness(file.path).then((liveJson) {
+            if (_activeCaptureSeq != seq) return; // تجاهل نتائج متأخرة
+            _livenessResult = liveJson ?? {'error': 'Invalid response'};
+            notifyListeners();
+          }).catchError((e) {
+            if (_activeCaptureSeq != seq) return;
+            _livenessResult = {'error': e.toString()};
+            notifyListeners();
+          }),
+        );
       }
 
       if (kEnableFaceRecognition) {
-        final recog = await _net.sendFaceRecognition(file.path);
-        _faceRecognitionResult = recog ?? {'error': 'Invalid response'};
-        notifyListeners();
+        futures.add(
+          _net.sendFaceRecognition(file.path).then((recog) {
+            if (_activeCaptureSeq != seq) return;
+            _faceRecognitionResult = recog ?? {'error': 'Invalid response'};
+            notifyListeners();
+          }).catchError((e) {
+            if (_activeCaptureSeq != seq) return;
+            _faceRecognitionResult = {'error': e.toString()};
+            notifyListeners();
+          }),
+        );
       }
 
-      Timer(const Duration(milliseconds: kDisplayImageMs), () async {
-        if (_showScreensaver) return;
-        await _resumeLivePreview();
-      });
+      // 3) مهلات آمنة لمنع "التجمّد"
+      // Soft timeout: غيّر الرسالة لكن لا تفرض الرجوع
+      final soft = Future.delayed(
+        Duration(milliseconds: kSoftTimeoutMs),
+            () {
+          if (_activeCaptureSeq == seq && _waiting) {
+            _waitMessage = 'Taking longer than usual…';
+            notifyListeners();
+          }
+        },
+      );
+
+      // Hard timeout: ابدأ العدّاد حتى لو النتائج لم تكتمل
+      final hard = Future.delayed(
+        Duration(milliseconds: kHardTimeoutMs),
+      );
+
+      // انتظر اكتمال النتائج أو hard timeout (أيهما أولًا)
+      if (futures.isEmpty) {
+        // لا يوجد مهام أصلاً: اعتبرها مكتملة فورًا
+        await Future.delayed(Duration(milliseconds: 50));
+      } else {
+        await Future.any([
+          Future.wait(futures).catchError((_) {}),
+          hard,
+        ]);
+      }
+      // دع soft يعمل لوحده (لا حاجة للانتظار له)
+      unawaited(soft);
+
+      // 4) أوقف شاشة الانتظار وابدأ عدّاد العرض ثم ارجع للبث
+      if (_activeCaptureSeq == seq) {
+        _waiting = false;
+        notifyListeners();
+        await _startDisplayAndResume(seq: seq);
+      }
     } catch (_) {
-      _livenessResult = {'error': 'Error sending image to backend!'};
+      // خطأ عام: أعرض بانر خطأ قصير ثم ارجع
+      _livenessResult ??= {'error': 'Error sending image to backend!'};
+      _waiting = false;
       notifyListeners();
+      await _startDisplayAndResume(seq: _activeCaptureSeq ?? ++_captureSeq);
     } finally {
       _isSnapshotting = false;
       _readyForNextImage = true;
@@ -941,6 +1059,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     _stopCountdown(force: true);
     _isSnapshotting = false;
 
+    // نظّف النتائج والبيانات
     _livenessResult = null;
     _faceRecognitionResult = null;
     _capturedFile = null;
@@ -956,10 +1075,24 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
 
     notifyListeners();
 
-    if (_controller == null || !_controller!.value.isInitialized) {
+    // ✅ بدل ما نعيد init كل مرة:
+    if (_controller == null) {
+      // أول مرة فقط أو لو فعلاً اختفت الكاميرا
       await _initCamera();
-    } else {
+    } else if (_controller!.value.isInitialized) {
+      // الكاميرا جاهزة → بس استأنف البث
       await _startStreamSafely();
+    } else {
+      // حالة نادرة: عندنا controller لكن مو مهيأ
+      try {
+        await _controller!.initialize();
+        await _controller!.lockCaptureOrientation(DeviceOrientation.portraitUp);
+        await _startStreamSafely();
+      } catch (e) {
+        // fallback لو فشل → إعادة init كاملة
+        await _initCamera();
+      }
     }
   }
+
 }

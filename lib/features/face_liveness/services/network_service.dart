@@ -22,7 +22,7 @@ class LivenessNetworkService {
 
 
   Future<Map<String, dynamic>?> sendLiveness(String imagePath) async {
-    final uri = Uri.parse(kLivenessApiUrl);
+    final uri = Uri.parse('https://workbench.ressystem.com/api/hr/liveness');
     final req = http.MultipartRequest('POST', uri)
       ..files.add(await http.MultipartFile.fromPath('image', imagePath));
 

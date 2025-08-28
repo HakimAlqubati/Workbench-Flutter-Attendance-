@@ -23,6 +23,8 @@ class FaceLivenessScreen extends StatefulWidget {
 
 class _FaceLivenessScreenState extends State<FaceLivenessScreen>
     with TickerProviderStateMixin, WidgetsBindingObserver {
+
+
   late final FaceLivenessController c;
   late final AnimationController glowCtrl;
 
@@ -57,6 +59,7 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
         setState(() => _isFullscreen = false);
       }
     }
+
   }
 
 
@@ -178,13 +181,15 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
 
   Widget _buildCameraUI(BuildContext context) {
     final cam = c.controller;
+    final size = MediaQuery.of(context).size;
 
+    // الأساس: المعاينة أو الصورة الملتقطة
     final Widget basePreview = (c.capturedFile != null)
         ? Transform(
       alignment: Alignment.center,
       transform: Matrix4.identity()..rotateY(math.pi),
       child: ClipPath(
-        clipper: OvalClipper(MediaQuery.of(context).size),
+        clipper: OvalClipper(size),
         child: Image.file(
           File(c.capturedFile!.path),
           fit: BoxFit.cover,
@@ -195,15 +200,17 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
         ? CameraPreviewCover(controller: cam)
         : const ColoredBox(color: Colors.black);
 
-    // اللون النشط للبيضاوي
+    // لون إطار البيضاوي بحسب الأهلية
     final Color ovalActiveColor = c.captureEligible
         ? const Color(0xff0fd86e) // ✅ جاهز
         : const Color(0xffffb74d); // ⚠️ داخل الإطار لكن غير مؤهل بعد
 
     return Stack(
       children: [
+        // المعاينة/الصورة
         Positioned.fill(child: basePreview),
 
+        // تظليل خفيف فوق المعاينة أثناء تشغيل الكاميرا بدون صورة ملتقطة
         if (c.cameraOpen && c.capturedFile == null)
           Positioned.fill(
             child: IgnorePointer(
@@ -223,6 +230,7 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
             ),
           ),
 
+        // قناع/حدود البيضاوي + توهج
         if (c.cameraOpen && c.capturedFile == null)
           Positioned.fill(
             child: IgnorePointer(
@@ -242,10 +250,10 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
             ),
           ),
 
-        // ✅ عدّاد عند الأهلية
+        // عدّاد الالتقاط عند الأهلية
         if (c.cameraOpen && c.countdown != null && c.captureEligible)
           Positioned(
-            bottom: MediaQuery.of(context).size.height * 0.18,
+            bottom: size.height * 0.18,
             left: 0,
             right: 0,
             child: Center(
@@ -260,7 +268,7 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
                     child: Text(
                       (c.countdown! > 0) ? '${c.countdown!}' : '✓',
                       style: TextStyle(
-                        fontSize: MediaQuery.of(context).size.width * 0.12,
+                        fontSize: size.width * 0.12,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                         decoration: TextDecoration.none,
@@ -279,36 +287,31 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
               ),
             ),
           )
-        // ⚠️ خلاف ذلك: رسالة قصيرة
+        // توجيهات المحاذاة إن لم تكن مؤهلًا
         else if (c.cameraOpen && !c.captureEligible)
-        // نظهر التوجيه حتى لو خرجت الزوايا قليلاً
           Positioned(
-            bottom: MediaQuery.of(context).size.height * 0.18,
+            bottom: size.height * 0.18,
             left: 0,
             right: 0,
             child: Center(
               child: Text(
                 c.tooFar
-                    ? "Move In" // بعيد: اقترب
-                    : (c.tooClose
-                    ? "Move Back" // قريب جدًا: ابتعد
-                    : "Align Center"), // داخل النطاق لكن غير متمركز بما يكفي
+                    ? "Move In"
+                    : (c.tooClose ? "Move Back" : "Align Center"),
                 style: TextStyle(
-                  fontSize: MediaQuery.of(context).size.width * 0.08,
+                  fontSize: size.width * 0.08,
                   fontWeight: FontWeight.w600,
                   color: Colors.amberAccent,
                   decoration: TextDecoration.none,
                   shadows: const [
-                    Shadow(
-                        color: Colors.black54,
-                        blurRadius: 8,
-                        offset: Offset(0, 3)),
+                    Shadow(color: Colors.black54, blurRadius: 8, offset: Offset(0, 3)),
                   ],
                 ),
               ),
             ),
           ),
 
+        // شريط التقدّم والسطوع أثناء البث
         if (c.cameraOpen && c.capturedFile == null)
           FaceRatioBar(
             progress: c.ratioProgress,
@@ -316,14 +319,14 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
             brightnessValue: c.brightnessLevel,
           ),
 
-        // ليفنِس بانر
+        // بانر liveness (يظهر عند وجود نتيجة)
         if (c.livenessResult != null)
           _buildLivenessBanner(context, c.livenessResult!),
 
-        // تعريف الوجه (اختياري)
+        // بانر التعرف على الوجه (اختياري)
         if (kEnableFaceRecognition && c.faceRecognitionResult != null)
           Positioned(
-            top: MediaQuery.of(context).size.height * 0.12 + 56,
+            top: size.height * 0.12 + 56,
             left: 16,
             right: 16,
             child: Center(
@@ -334,15 +337,11 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
                   opacity: .18,
                   radius: 16,
                   border: true,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.badge_rounded,
-                          color: Colors.white, size: 20),
+                      const Icon(Icons.badge_rounded, color: Colors.white, size: 20),
                       const SizedBox(width: 8),
                       Flexible(
                         child: Text(
@@ -365,8 +364,22 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
             ),
           ),
 
+
+        // ===== طبقة الانتظار فوق الصورة الملتقطة =====
+        if (c.capturedFile != null && c.waiting)
+          Positioned.fill(
+            child: Container(
+              color: Colors.black.withOpacity(0.28),
+              alignment: Alignment.center,
+              child: const SizedBox(
+                width: 40,
+                height: 40,
+                child: CircularProgressIndicator(strokeWidth: 3),
+              ),
+            ),
+          ),
         // زر التالي بعد الالتقاط
-        if (c.capturedFile != null)
+        if (c.capturedFile != null && !c.waiting)
           Positioned(
             bottom: MediaQuery.of(context).padding.bottom + 20,
             right: 16,
@@ -380,10 +393,7 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 14,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                 textStyle: const TextStyle(fontWeight: FontWeight.w800),
               ),
               onPressed: () async => c.tapNextEmployee(),
@@ -391,7 +401,7 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
             ),
           ),
 
-        // شريط علوي: عداد السكرين سيفر
+        // شريط علوي: عداد الـ screensaver
         Positioned(
           top: MediaQuery.of(context).padding.top + 12,
           left: 12,
@@ -407,13 +417,11 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
                   opacity: 0.14,
                   border: true,
                   radius: 999,
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.timer_outlined,
-                          size: 16, color: Color(0xff0fd86e)),
+                      const Icon(Icons.timer_outlined, size: 16, color: Color(0xff0fd86e)),
                       const SizedBox(width: 6),
                       Text(
                         '${c.screensaverCountdown}',
@@ -431,7 +439,7 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
           ),
         ),
 
-        // زر Full Screen أعلى اليمين — يظهر فقط إذا لم نكن في وضع ملء الشاشة
+        // زر Full Screen (يظهر فقط إن لم نكن في وضع ملء الشاشة)
         if (!_isFullscreen)
           Positioned(
             top: MediaQuery.of(context).padding.top + 12,
@@ -524,7 +532,24 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
   }
 
   Widget _buildLivenessBanner(BuildContext context, Map<String, dynamic> j) {
-    final ok = _livenessOk(j);
+    final status = j['status'];
+    final ok = status == 'ok';
+    final isNoMatch = status == 'no_match';
+
+    IconData icon;
+    Color color;
+
+    if (ok) {
+      icon = Icons.verified_rounded;
+      color = const Color(0xff0fd86e); // أخضر
+    } else if (isNoMatch) {
+      icon = Icons.error_rounded;
+      color = const Color(0xffff4d67); // أحمر
+    } else {
+      icon = Icons.warning_amber_rounded;
+      color = const Color(0xffffb74d); // برتقالي (خطأ أو Unknown)
+    }
+
     return Positioned(
       top: MediaQuery.of(context).size.height * 0.12,
       left: 16,
@@ -537,18 +562,11 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
             opacity: .18,
             radius: 16,
             border: true,
-            padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  ok ? Icons.verified_rounded : Icons.error_rounded,
-                  color: ok
-                      ? const Color(0xff0fd86e)
-                      : const Color(0xffff4d67),
-                  size: 22,
-                ),
+                Icon(icon, color: color, size: 22),
                 const SizedBox(width: 8),
                 Flexible(
                   child: Text(
@@ -558,7 +576,9 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
                     style: TextStyle(
                       color: ok
                           ? const Color(0xffd9ffe9)
-                          : const Color(0xffffe2e8),
+                          : (isNoMatch
+                          ? const Color(0xffffe2e8)
+                          : const Color(0xfffff3e0)),
                       fontWeight: FontWeight.w800,
                       fontSize: 14.5,
                       letterSpacing: .2,
@@ -590,13 +610,28 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
     return false;
   }
 
+
   String _livenessText(Map<String, dynamic> j) {
-    final l = j['liveness'];
-    final score = j['score'];
-    if (l == null && j['error'] != null) return '❌ (${j['error']})';
-    if (l is bool && score is num) {
-      return (l && score >= 0.85) ? 'Real face ✅ ($score)' : '❌ ($score)';
+    debugPrint('livenessRes{$j}');
+
+    final status = j['status'];
+    final msg = j['message'] ?? '';
+    final error = j['error'];
+
+    if (status == 'ok') {
+      final score = j['result']?['score'] ?? j['score'];
+      return 'Real face  (${score ?? '-'})';
     }
+
+    if (status == 'no_match') {
+      final score = j['result']?['score'] ?? j['score'];
+      return '(${score ?? '-'})';
+    }
+
+    if (error != null) {
+      return '($error)';
+    }
+
     return 'Unknown';
   }
 

@@ -5,14 +5,7 @@ import 'package:my_app/features/settings/settings_store.dart';
 const String kFaceRecognitionApiUrl =
     'https://workbench.ressystem.com/api/hr/faceRecognition';
 
-String get kLivenessApiUrl {
-  try {
-    final base = SettingsStore.I.value.baseUrl;
-    return '$base/api/liveness';
-  } catch (_) {
-    return 'http://47.130.152.211:5000/api/liveness';
-  }
-}
+
 
 /// ------- Face fit thresholds -------
 const double kMinFaceRatio = 0.06;
@@ -50,7 +43,7 @@ int get kCountdownSeconds {
   try {
     return SettingsStore.I.value.countdownSeconds;
   } catch (_) {
-    return 5;
+    return 1;
   }
 }
 
@@ -61,8 +54,15 @@ int get kScreensaverSeconds {
     return 30;
   }
 }
+// مدة بقاء الصورة بعد اكتمال النتائج أو تفعيل fallback
+const int kDisplayImageMs   = 10000;
 
-const int kDisplayImageMs = 15000;
+// مهلة لعرض رسالة "يطول أكثر من المعتاد"
+const int kSoftTimeoutMs    = 2500;
+
+// مهلة قصوى قبل بدء العدّاد حتى لو النتائج لم تكتمل
+const int kHardTimeoutMs    = 6000;
+
 const int kClockDwellMs = 30000;
 const int kBrightnessSampleEveryN = 3;
 

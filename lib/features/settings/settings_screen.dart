@@ -15,7 +15,6 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController _countdownCtrl;
   late final TextEditingController _screensaverCtrl;
-  late final TextEditingController _baseUrlCtrl;
 
   double ovalRx = kDefaultOvalRxPct;
   double ovalRy = kDefaultOvalRyPct;
@@ -24,7 +23,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     final s = SettingsStore.I.value;
-    _baseUrlCtrl = TextEditingController(text: SettingsStore.I.value.baseUrl);
     _countdownCtrl = TextEditingController(text: s.countdownSeconds.toString());
     _screensaverCtrl = TextEditingController(text: s.screensaverSeconds.toString());
     ovalRx = s.ovalRxPct;
@@ -35,7 +33,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void dispose() {
     _countdownCtrl.dispose();
     _screensaverCtrl.dispose();
-    _baseUrlCtrl.dispose();
     super.dispose();
   }
 
@@ -60,8 +57,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await SettingsStore.I.setOvalRxPct(ovalRx);
     await SettingsStore.I.setOvalRyPct(ovalRy);
 
-    final base = _baseUrlCtrl.text.trim();
-    await SettingsStore.I.setBaseUrl(base);
+
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -244,30 +240,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 if (mounted) setState(() {});
               },
             ),
-            Card(
-              elevation: 1,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: BorderSide(color: primaryColor.withOpacity(0.4)),
-              ),
-              color: Colors.white.withOpacity(0.06),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: TextField(
-                  controller: _baseUrlCtrl,
-                  keyboardType: TextInputType.url, // نصي عادي (URL مناسب هنا)
-                  decoration: const InputDecoration(
-                    labelText: 'Server Base URL',
-                    hintText: 'Default: http://47.130.152.211:5000',
-                    border: InputBorder.none,
-                    labelStyle: TextStyle(color: Colors.white70),
-                  ),
-                  style: const TextStyle(color: Colors.white),
-                  textAlign: TextAlign.center,
-                  cursorColor: primaryColor,
-                ),
-              ),
-            ),
+
 
             const SizedBox(height: 12),
             ElevatedButton.icon(
