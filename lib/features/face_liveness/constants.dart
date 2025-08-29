@@ -55,7 +55,7 @@ int get kScreensaverSeconds {
   }
 }
 // مدة بقاء الصورة بعد اكتمال النتائج أو تفعيل fallback
-const int kDisplayImageMs   = 10000;
+const int kDisplayImageMs   = 5000;
 
 // مهلة لعرض رسالة "يطول أكثر من المعتاد"
 const int kSoftTimeoutMs    = 2500;

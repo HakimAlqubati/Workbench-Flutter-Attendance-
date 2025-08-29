@@ -2,6 +2,7 @@
 // File: lib/features/face_liveness/controller/face_liveness_controller.dart
 // =============================
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -10,7 +11,13 @@ import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:gallery_saver_plus/gallery_saver.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
+
+// 1) التقط الصورة واعرضها فورًا
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as path;
+
 
 import '../constants.dart';
 import '../services/network_service.dart';
@@ -506,11 +513,15 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
         debugPrint('Hakim{$sizeRaw}');
         debugPrint('rawMin: ${_sizeCfg.rawMin.toStringAsFixed(3)}');
         debugPrint('rawMax: ${_sizeCfg.rawMax.toStringAsFixed(3)}');
+        final bool goodLighting = _brightnessStatus == 'Good lighting ✅' || _brightnessStatus == 'Excellent lighting 🌟';
+
         // ✅ الأهلية تعتمد على (تمركز المركز + حجم ضمن النطاق)
         final bool eligible = _faceDetected
             && _insideOval
             && sizeRaw >= _sizeCfg.rawMin
-            && sizeRaw <= _sizeCfg.rawMax;
+            && sizeRaw <= _sizeCfg.rawMax
+            && goodLighting
+        ;
 
         _setCaptureEligible(eligible);
 
@@ -582,6 +593,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
   static const double _kEdgeOverflowTol = 0.22; // 15% خارج الحد
   static const double _kCornersNeeded = 4;      // 3 زوايا كفاية
 
+  // استبدل دالة _isFaceInsideOvalOnScreen بالكامل بهذه (إزالة return المكرر غير القابل للوصول)
   bool _isFaceInsideOvalOnScreen({
     required Offset faceCenter,
     required Size imageRawSize,
@@ -621,16 +633,13 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
         cx = 2 * midX - cx;
       }
 
-      // مسافة مُطبَّعة لنقطة بالنسبة للبيضاوي
       final dxn = (cx - ovalCx) / ovalRx;
       final dyn = (cy - ovalCy) / ovalRy;
       final distance = dxn * dxn + dyn * dyn; // <= 1 داخل
-
-      // اسمح بزيادة 15% خارج الحد
       if (distance <= (1.0 + _kEdgeOverflowTol)) insideCount++;
     }
 
-    // أيضًا لو المركز داخل البيضاوي بزيادة سماحية نصفية
+    // تحقُّق إضافي: مركز الوجه داخل البيضاوي مع سماحية نصفية
     final faceCxRaw = faceRect.center;
     double ccx = faceCxRaw.dx * scale + dx;
     double ccy = faceCxRaw.dy * scale + dy;
@@ -642,9 +651,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     final cdyn = (ccy - ovalCy) / ovalRy;
     final centerInside = (cdxn * cdxn + cdyn * cdyn) <= (1.0 + _kEdgeOverflowTol * 0.5);
 
-    return insideCount >= _kCornersNeeded && centerInside; // كل الزوايا + المركز داخل
-
-    return insideCount >= _kCornersNeeded || centerInside;
+    return insideCount >= _kCornersNeeded && centerInside;
   }
 
   void _updateFaceDetected(bool detected) {
@@ -724,27 +731,56 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
         return;
       }
 
-      // 1) التقط الصورة واعرضها فورًا
-      final file = await _controller!.takePicture();
-      _capturedFile = file;
+      // ===== [inside _handleLivenessCheck بعد takePicture()] استبدل بلوك الحفظ في المعرض بهذا =====
+
+// 1️⃣ التقط الصورة
+      final XFile captured = await _controller!.takePicture();
+
+// 2️⃣ احفظ الصورة في المعرض باستخدام gallery_saver_plus (لا حاجة لطلب أذونات يدوياً)
+      try {
+        final bool? ok = await GallerySaver.saveImage(
+          captured.path,
+          albumName: 'Liveness Captures', // يمكنك تغييره
+          toDcim: true,                   // اختياري: يحفظ تحت DCIM على أندرويد
+        );
+        debugPrint('✅ حفظ في المعرض: ${ok == true}');
+      } catch (e) {
+        debugPrint('❌ فشل الحفظ في المعرض: $e');
+      }
+
+// 3️⃣ انسخ الصورة إلى مجلد التطبيق كما كان سابقاً
+      final Directory dir = await getApplicationDocumentsDirectory();
+      final Directory folder = Directory(path.join(dir.path, 'liveness_captures'));
+      if (!await folder.exists()) {
+        await folder.create(recursive: true);
+      }
+      final String filename = 'capture_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final String savedPath = path.join(folder.path, filename);
+      final File savedFile = await File(captured.path).copy(savedPath);
+      _capturedFile = XFile(savedFile.path);
+
+// ✅ الباقي منطق الانتظار/الإرسال كما هو
       _lastFaceRect = null;
       _livenessResult = null;
       _faceRecognitionResult = null;
 
-      // ✅ أعِد تشغيل عدّاد الـ screensaver الآن (من الصفر)
+// أعِد تشغيل عدّاد الـ screensaver
       _resetInactivity();
 
-      // فعّل شاشة الانتظار فوق الصورة
+// فعّل شاشة الانتظار فوق الصورة
       _waiting = true;
       _waitMessage = '';
       notifyListeners();
 
+
+
       // 2) أرسل المهام بالتوازي
       final futures = <Future<void>>[];
 
+
       if (kEnableLiveness) {
         futures.add(
-          _net.sendLiveness(file.path).then((liveJson) {
+          _net.sendLiveness(captured.path).then((liveJson) {
             if (_activeCaptureSeq != seq) return; // تجاهل نتائج متأخرة
             _livenessResult = liveJson ?? {'error': 'Invalid response'};
             notifyListeners();
@@ -758,7 +794,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
 
       if (kEnableFaceRecognition) {
         futures.add(
-          _net.sendFaceRecognition(file.path).then((recog) {
+          _net.sendFaceRecognition(captured.path).then((recog) {
             if (_activeCaptureSeq != seq) return;
             _faceRecognitionResult = recog ?? {'error': 'Invalid response'};
             notifyListeners();
@@ -769,7 +805,6 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
           }),
         );
       }
-
       // 3) مهلات آمنة لمنع "التجمّد"
       // Soft timeout: غيّر الرسالة لكن لا تفرض الرجوع
       final soft = Future.delayed(

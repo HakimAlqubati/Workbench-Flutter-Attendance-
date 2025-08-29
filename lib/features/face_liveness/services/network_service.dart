@@ -38,9 +38,6 @@ class LivenessNetworkService {
       final streamed = await io.send(req).timeout(const Duration(seconds: 12));
       final res = await http.Response.fromStream(streamed);
 
-      debugPrint('⬅️ Response status: ${res.statusCode}');
-      debugPrint('Response headers: ${res.headers}');
-      debugPrint('Response body: ${res.body}');
 
       if (res.body.isEmpty) return null;
       return jsonDecode(res.body) as Map<String, dynamic>;

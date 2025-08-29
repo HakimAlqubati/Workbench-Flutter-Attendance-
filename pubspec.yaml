@@ -42,6 +42,9 @@ dependencies:
   wakelock_plus: ^1.2.6
   shared_preferences: ^2.2.3
   flutter_launcher_icons: ^0.13.1
+  path_provider: ^2.1.1
+  gallery_saver_plus: ^3.2.9
+  permission_handler: ^11.3.1
 
 flutter_icons:
   android: true

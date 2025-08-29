@@ -179,6 +179,27 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
     );
   }
 
+  String _getGuidanceText(FaceLivenessController c) {
+    // الأولوية لمشاكل الإضاءة
+    final status = c.brightnessStatus ?? '';
+    if (status.contains('❌')) {
+      if (status.contains('dark') || status.contains('dim')) {
+        return "Find better lighting";
+      }
+    }
+    if (status.contains('⚠️')) {
+      if (status.contains('bright')) {
+        return "Avoid direct light";
+      }
+    }
+
+    // إذا كانت الإضاءة جيدة، اعرض توجيهات المسافة
+    if (c.tooFar) return "Move In";
+    if (c.tooClose) return "Move Back";
+
+    return "Center Your Face";
+  }
+
   Widget _buildCameraUI(BuildContext context) {
     final cam = c.controller;
     final size = MediaQuery.of(context).size;
@@ -289,15 +310,17 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
           )
         // توجيهات المحاذاة إن لم تكن مؤهلًا
         else if (c.cameraOpen && !c.captureEligible)
+
           Positioned(
             bottom: size.height * 0.18,
             left: 0,
             right: 0,
             child: Center(
               child: Text(
-                c.tooFar
-                    ? "Move In"
-                    : (c.tooClose ? "Move Back" : "Align Center"),
+                // c.tooFar
+                //     ? "Move In"
+                //     : (c.tooClose ? "Move Back" : "Align Center"),
+                _getGuidanceText(c),
                 style: TextStyle(
                   fontSize: size.width * 0.08,
                   fontWeight: FontWeight.w600,
@@ -632,7 +655,7 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
       return '($error)';
     }
 
-    return 'Unknown';
+    return 'No clear face found';
   }
 
   String _recognitionText(Map<String, dynamic> j) {
