@@ -1,10 +1,15 @@
 import 'package:flutter/foundation.dart';
 import 'package:my_app/features/settings/settings_store.dart';
 
-/// ------- API endpoints -------
-const String kFaceRecognitionApiUrl =
-    'https://workbench.ressystem.com/api/hr/faceRecognition';
 
+
+/// ------- API Base URL -------
+const String kApiBaseUrl = "https://workbench.ressystem.com";
+
+
+/// ------- API endpoints -------
+const String kFaceRecognitionApiUrl = "$kApiBaseUrl/api/hr/faceRecognition";
+const String kAttendanceApiUrl      = "$kApiBaseUrl/api/hr/attendance/store";
 
 
 /// ------- Face fit thresholds -------

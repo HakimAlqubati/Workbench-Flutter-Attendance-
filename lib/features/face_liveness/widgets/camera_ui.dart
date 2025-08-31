@@ -1,0 +1,246 @@
+import 'dart:io';
+import 'dart:math' as math;
+import 'package:camera/camera.dart';
+import 'package:flutter/material.dart';
+import 'package:my_app/features/face_liveness/controllers/face_liveness_controller.dart';
+import 'package:my_app/features/face_liveness/painters/frame_glow_painter.dart';
+import 'package:my_app/features/face_liveness/painters/frame_mask_painter.dart';
+import 'package:my_app/features/face_liveness/widgets/camera_preview_cover.dart';
+import 'package:my_app/features/face_liveness/widgets/face_ratio_bar.dart';
+import 'package:my_app/features/face_liveness/widgets/liveness_banner.dart';
+import 'package:my_app/features/face_liveness/widgets/gclass.dart';
+import 'package:my_app/features/face_liveness/widgets/oval_clipper.dart';
+import 'package:my_app/features/face_liveness/constants.dart';
+
+class CameraUI extends StatelessWidget {
+  final FaceLivenessController c;
+  final AnimationController glowCtrl;
+  const CameraUI({super.key, required this.c, required this.glowCtrl});
+
+  @override
+  Widget build(BuildContext context) {
+    final cam = c.controller;
+    final size = MediaQuery.of(context).size;
+
+    // الأساس: المعاينة أو الصورة الملتقطة
+    final Widget basePreview = (c.capturedFile != null)
+        ? Transform(
+      alignment: Alignment.center,
+      transform: Matrix4.identity()..rotateY(math.pi),
+      child: ClipPath(
+        clipper: OvalClipper(size),
+        child: Image.file(File(c.capturedFile!.path), fit: BoxFit.cover),
+      ),
+    )
+        : (cam != null && cam.value.isInitialized)
+        ? CameraPreviewCover(controller: cam)
+        : const ColoredBox(color: Colors.black);
+
+    // لون إطار البيضاوي بحسب الأهلية
+    final Color ovalActiveColor =
+    c.captureEligible ? const Color(0xff0fd86e) : const Color(0xffffb74d);
+
+    return Stack(children: [
+      Positioned.fill(child: basePreview),
+
+      if (c.cameraOpen && c.capturedFile == null)
+        Positioned.fill(
+          child: IgnorePointer(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  colors: [
+                    Colors.black.withOpacity(0.35),
+                    Colors.transparent,
+                    Colors.black.withOpacity(0.08),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+
+      if (c.cameraOpen && c.capturedFile == null)
+        Positioned.fill(
+          child: IgnorePointer(
+            child: CustomPaint(
+              painter: FrameMaskPainter(
+                inside: c.insideOval,
+                activeColor: ovalActiveColor,
+                inactiveColor: Colors.white.withOpacity(0.92),
+                glow: (math.sin(glowCtrl.value * 2 * math.pi) + 1) / 2,
+                strokeWidth: 2.0,
+              ),
+              foregroundPainter: FrameGlowPainter(glowCtrl, inside: c.captureEligible),
+            ),
+          ),
+        ),
+
+      // عدّاد الالتقاط
+      if (c.cameraOpen && c.countdown != null && c.captureEligible)
+        Positioned(
+          bottom: size.height * 0.18,
+          left: 0, right: 0,
+          child: Center(
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 1.0, end: 1.2),
+              key: ValueKey(c.countdown),
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+              builder: (context, scale, child) => Transform.scale(
+                scale: scale,
+                child: Text(
+                  (c.countdown! > 0) ? '${c.countdown!}' : '✓',
+                  style: TextStyle(
+                    fontSize: size.width * 0.12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    decoration: TextDecoration.none,
+                    letterSpacing: 0.5,
+                    shadows: const [Shadow(color: Colors.black87, blurRadius: 12, offset: Offset(0, 4))],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        )
+      else if (c.cameraOpen && !c.captureEligible)
+        Positioned(
+          bottom: size.height * 0.18, left: 0, right: 0,
+          child: Center(
+            child: Text(
+              _guidanceText(c),
+              style: TextStyle(
+                fontSize: size.width * 0.08,
+                fontWeight: FontWeight.w600,
+                color: Colors.amberAccent,
+                decoration: TextDecoration.none,
+                shadows: const [Shadow(color: Colors.black54, blurRadius: 8, offset: Offset(0, 3))],
+              ),
+            ),
+          ),
+        ),
+
+      if (c.cameraOpen && c.capturedFile == null)
+        FaceRatioBar(
+          progress: c.ratioProgress,
+          brightnessText: _brightnessLabel(c),
+          brightnessValue: c.brightnessLevel,
+        ),
+
+      if (c.livenessResult != null)
+        LivenessBanner(json: c.livenessResult!),
+
+      if (kEnableFaceRecognition && c.faceRecognitionResult != null)
+        _RecognitionBanner(json: c.faceRecognitionResult!),
+
+      if (c.capturedFile != null && c.waiting)
+        Positioned.fill(
+          child: Container(
+            color: Colors.black.withOpacity(0.28),
+            alignment: Alignment.center,
+            child: const SizedBox(width: 40, height: 40, child: CircularProgressIndicator(strokeWidth: 3)),
+          ),
+        ),
+
+      if (c.capturedFile != null && !c.waiting)
+        Positioned(
+          bottom: MediaQuery.of(context).padding.bottom + 20,
+          right: 16,
+          child: ElevatedButton.icon(
+            icon: const Icon(Icons.arrow_forward_rounded),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).primaryColor,
+              foregroundColor: Colors.white,
+              shadowColor: Colors.black54,
+              elevation: 8,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+              textStyle: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+            onPressed: () async => c.tapNextEmployee(),
+            label: const Text('Next Employee'),
+          ),
+        ),
+    ]);
+  }
+
+  // == helpers ==
+  String _guidanceText(FaceLivenessController c) {
+    final status = c.brightnessStatus ?? '';
+    if (status.contains('❌') && (status.contains('dark') || status.contains('dim'))) {
+      return "Find better lighting";
+    }
+    if (status.contains('⚠️') && status.contains('bright')) {
+      return "Avoid direct light";
+    }
+    if (c.tooFar) return "Move In";
+    if (c.tooClose) return "Move Back";
+    return "Center Your Face";
+  }
+
+  String _brightnessLabel(FaceLivenessController c) {
+    if (c.brightnessLevel == null) return '';
+    final pct = (c.brightnessLevel!.clamp(0, 255) / 255.0) * 100.0;
+    final status = c.brightnessStatus ?? '';
+    return '$status - ${pct.toStringAsFixed(0)}%';
+  }
+}
+
+class _RecognitionBanner extends StatelessWidget {
+  final Map<String, dynamic> json;
+  const _RecognitionBanner({required this.json});
+
+  String _text(Map<String, dynamic> j) {
+    if (j['error'] != null) return '❌ (${j['error']})';
+    final Map<String, dynamic> m = (j['match'] is Map) ? Map<String, dynamic>.from(j['match']) : {};
+    final bool found = m['found'] == true;
+    final name = m['name'] ?? j['employee']?['name'] ?? j['name'] ?? 'Unknown';
+    final id = m['employee_id'] ?? j['employee']?['id'] ?? j['id'];
+    final score = m['score'] ?? j['score'] ?? j['similarity'];
+    if (!found) {
+      final lower = name.toString().toLowerCase();
+      if (lower.contains('no match')) return 'No match found ❌';
+      return 'No match ❌';
+    }
+    final parts = <String>['$name'];
+    if (id != null) parts.add('#$id');
+    if (score != null) parts.add('score: $score');
+    return '✅ ${parts.join('  •  ')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    return Positioned(
+      top: size.height * 0.12 + 56,
+      left: 16, right: 16,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Glass(
+            blur: 14, opacity: .18, radius: 16, border: true,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.badge_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 8),
+              Flexible(child: Text(
+                _text(json),
+                softWrap: true, overflow: TextOverflow.fade,
+                style: const TextStyle(
+                  color: Color(0xffd9ffe9),
+                  decoration: TextDecoration.none,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14.5,
+                  letterSpacing: .2,
+                ),
+              )),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
