@@ -89,7 +89,7 @@ class _AttendanceKeypadScreenState extends State<AttendanceKeypadScreen> with Si
     try {
       // إن كان لديك توكن مخزّن مثلاً:
       // final token = await AuthService().getToken();
-      final res = await AttendanceService.storeAttendance(
+      final res = await AttendanceService.storeByRfid(
         rfid: _input,
         dateTime: formatDateTime(DateTime.now()),
         headers: {

@@ -8,7 +8,7 @@ const String kApiBaseUrl = "https://workbench.ressystem.com";
 
 
 /// ------- API endpoints -------
-const String kFaceRecognitionApiUrl = "$kApiBaseUrl/api/hr/faceRecognition";
+const String kFaceRecognitionApiUrl = "$kApiBaseUrl/api/hr/identifyEmployee";
 const String kAttendanceApiUrl      = "$kApiBaseUrl/api/hr/attendance/store";
 
 

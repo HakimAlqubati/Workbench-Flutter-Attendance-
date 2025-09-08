@@ -136,6 +136,8 @@ class CameraUI extends StatelessWidget {
       if (kEnableFaceRecognition && c.faceRecognitionResult != null)
         _RecognitionBanner(json: c.faceRecognitionResult!),
 
+      if (c.attendanceResult != null)
+        AttendanceBanner(json: c.attendanceResult!),
       if (c.capturedFile != null && c.waiting)
         Positioned.fill(
           child: Container(
@@ -238,6 +240,73 @@ class _RecognitionBanner extends StatelessWidget {
                 ),
               )),
             ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+
+class AttendanceBanner extends StatelessWidget {
+  final Map<String, dynamic> json;
+  const AttendanceBanner({super.key, required this.json});
+
+  String _text(Map<String, dynamic> j) {
+    final status = j['status'];
+    final message = j['message'] ?? '';
+    if (status == 'ok') {
+      return '✅ Attendance recorded\n$message';
+    }
+    return '❌ Attendance failed\n$message';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final isOk = json['status'] == 'ok';
+
+    return Positioned(
+      top: size.height * 0.12 + 112, // أسفل Liveness + Recognition
+      left: 16,
+      right: 16,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Glass(
+            blur: 14,
+            opacity: .18,
+            radius: 16,
+            border: true,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  isOk ? Icons.how_to_reg_rounded : Icons.cancel_rounded,
+                  color: isOk ? const Color(0xff0fd86e) : const Color(0xffff4d67),
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    _text(json),
+                    softWrap: true,
+                    overflow: TextOverflow.fade,
+                    style: TextStyle(
+                      color: isOk ? const Color(0xffd9ffe9) : const Color(0xffffe2e8),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14.5,
+                      height: 1.4,
+                      letterSpacing: .2,
+                      decoration: TextDecoration.none,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/cupertino.dart';
 import 'package:http/http.dart' as http;
 import 'package:my_app/features/face_liveness/constants.dart';
 import 'package:my_app/features/face_liveness/services/auth_service.dart';
@@ -10,15 +11,34 @@ class ApiResult {
 }
 
 class AttendanceService {
-  static Future<ApiResult> storeAttendance({
+  static Future<ApiResult> storeByRfid({
     required String rfid,
     required String dateTime, // "YYYY-MM-DD HH:mm:ss"
     Map<String, String>? headers,
   }) async {
-    final uri = Uri.parse(kAttendanceApiUrl);
-    final body = jsonEncode({"rfid": rfid, "date_time": dateTime});
+    return _postAttendance(body: {
+      "rfid": rfid,
+      "date_time": dateTime,
+    }, headers: headers);
+  }
 
-    // هيدرز المصادقة
+  static Future<ApiResult> storeByEmployeeId({
+    required int employeeId,
+    required String dateTime, // "YYYY-MM-DD HH:mm:ss"
+    Map<String, String>? headers,
+  }) async {
+    return _postAttendance(body: {
+      "employee_id": employeeId,
+      "date_time": dateTime,
+    }, headers: headers);
+  }
+
+  // === مشترك: تنفيذ POST واستخراج الرسالة بشكل ذكي ===
+  static Future<ApiResult> _postAttendance({
+    required Map<String, dynamic> body,
+    Map<String, String>? headers,
+  }) async {
+    final uri = Uri.parse(kAttendanceApiUrl);
     final authHeaders = await AuthService().authHeader();
     final mergedHeaders = <String, String>{
       "Content-Type": "application/json",
@@ -30,7 +50,7 @@ class AttendanceService {
     http.Response res;
     try {
       res = await http
-          .post(uri, headers: mergedHeaders, body: body)
+          .post(uri, headers: mergedHeaders, body: jsonEncode(body))
           .timeout(const Duration(seconds: 20));
     } catch (e) {
       return ApiResult(ok: false, message: "Network error: $e");
@@ -38,12 +58,10 @@ class AttendanceService {
 
     final raw = utf8.decode(res.bodyBytes);
 
-    // حاول دائمًا استخراج رسالة مفهومة من الجسم
-    String _extractMessage(String body) {
+    String extractMsg(String body) {
       try {
         final d = jsonDecode(body);
         if (d is Map<String, dynamic>) {
-          // صيغ شائعة
           String m = (d["message"] ?? d["msg"] ?? d["error"] ?? "").toString();
           if (m.isEmpty && d["errors"] is Map) {
             final errors = (d["errors"] as Map)
@@ -55,19 +73,18 @@ class AttendanceService {
           return m;
         }
       } catch (_) {}
-      return body; // ليس JSON، أعد النص كما هو
+      return body;
     }
 
-    // 2xx ⇒ نجاح/فشل منطقي حسب JSON
     if (res.statusCode >= 200 && res.statusCode < 300) {
       try {
         final data = jsonDecode(raw);
         if (data is Map<String, dynamic>) {
-          final status = data["status"] == true || data["success"] == true || data["ok"] == true;
-          var msg = _extractMessage(raw);
-          if (msg.isEmpty) {
-            msg = status ? "Attendance recorded successfully." : "Failed to record attendance.";
-          }
+          final status =   data["status"] == true ;
+          debugPrint('row ${raw}');
+          debugPrint(raw);
+          var rowDecoded = jsonDecode(raw);
+          var msg = rowDecoded['message'];
           return ApiResult(ok: status, message: msg);
         }
         return ApiResult(ok: true, message: "OK");
@@ -76,8 +93,7 @@ class AttendanceService {
       }
     }
 
-    // 4xx/5xx ⇒ رجّع الرسالة الحقيقية بدل "HTTP 422…"
-    final serverMsg = _extractMessage(raw);
+    final serverMsg = extractMsg(raw);
     return ApiResult(ok: false, message: serverMsg.isNotEmpty ? serverMsg : "HTTP ${res.statusCode}");
   }
 }

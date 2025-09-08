@@ -13,21 +13,28 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:gallery_saver_plus/gallery_saver.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
+import 'package:my_app/features/attendance/attendance_service.dart';
 
 // 1) التقط الصورة واعرضها فورًا
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 
-
 import '../constants.dart';
 import '../services/network_service.dart';
+
 
 class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver {
   // ===== Dependencies / Services =====
   final LivenessNetworkService _net = LivenessNetworkService();
   int _warmUpFrames = 0;
 
+  VoidCallback? onLivenessFailed;
+
   DateTime? _lastBlendTs;
+
+  Map<String, dynamic>? _attendanceResult;
+  Map<String, dynamic>? get attendanceResult => _attendanceResult;
+
 
   // ===== Camera =====
   CameraController? _controller;
@@ -134,7 +141,6 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
   bool get recognitionPending =>
       kEnableFaceRecognition && _waiting && (_faceRecognitionResult == null);
 
-
   // Clock
   final List<String> _clockPositions = ['center', 'right', 'left'];
   int _clockPosIndex = 0;
@@ -195,6 +201,15 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
   bool get tooClose => _sizeRaw != null && _sizeRaw! > _sizeCfg.rawMax;
 
   double get fitPct => (_ratioProgress.clamp(0.0, 1.0)) * 100.0;
+
+  // ===== حقل للحضور الآلي لمنع التكرار لكل لقطة =====
+  bool _postedAttendanceForThisCapture = false;
+
+  // اختيارية: لعرض رسالة آخر استدعاء API في الواجهة
+  String? _lastApiMessage;
+  String? get lastApiMessage => _lastApiMessage;
+  bool _lastApiOk = false;
+  bool get lastApiOk => _lastApiOk;
 
   // ===== Lifecycle =====
   Future<void> init() async {
@@ -266,7 +281,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
   Future<void> _initCamera() async {
     final cameras = await availableCameras();
     _frontCamera = cameras.firstWhere(
-          (c) => c.lensDirection == CameraLensDirection.front,
+          (c) => c.lensDirection == CameraLensDirection.back,
       orElse: () => cameras.first,
     );
     _controller = CameraController(
@@ -342,6 +357,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     _capturedFile = null;
     _livenessResult = null;
     _faceRecognitionResult = null;
+    _attendanceResult = null;
     _stopCountdown(force: true);
     _isSnapshotting = false;
     _isDetecting = false;
@@ -395,6 +411,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     _capturedFile = null;
     _livenessResult = null;
     _faceRecognitionResult = null;
+    _attendanceResult = null;
     _cameraOpen = true;
     _isSnapshotting = false;
     _readyForNextImage = true;
@@ -402,7 +419,6 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     _ratioProgress = 0.0;
 
     _warmUpFrames = 12; // ⬅️ تجاهل أول 12 إطار بعد الرجوع
-
 
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 120));
@@ -459,7 +475,9 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
         // اختر أكبر وجه
         final face = faces.reduce((a, b) =>
         (a.boundingBox.width * a.boundingBox.height) >
-            (b.boundingBox.width * b.boundingBox.height) ? a : b);
+            (b.boundingBox.width * b.boundingBox.height)
+            ? a
+            : b);
 
         final rect = face.boundingBox;
         _lastFaceRect = rect;
@@ -468,7 +486,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
         final rawH = image.height.toDouble();
 
         final bool isFront =
-            _frontCamera?.lensDirection == CameraLensDirection.front;
+            _frontCamera?.lensDirection == CameraLensDirection.back;
 
         // داخل/مركز البيضاوي
         _insideOval = _isFaceInsideOvalOnScreen(
@@ -503,7 +521,8 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
         if (!inFrame || posFactor == 0.0) {
           _setRatioProgress = 0.0;
         } else {
-          final double targetProgress = (sizeFactor * posFactor).clamp(0.0, 1.0);
+          final double targetProgress =
+          (sizeFactor * posFactor).clamp(0.0, 1.0);
           _blendProgress(targetProgress, smooth: 0.22);
         }
 
@@ -513,14 +532,16 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
         debugPrint('Hakim{$sizeRaw}');
         debugPrint('rawMin: ${_sizeCfg.rawMin.toStringAsFixed(3)}');
         debugPrint('rawMax: ${_sizeCfg.rawMax.toStringAsFixed(3)}');
-        final bool goodLighting = _brightnessStatus == 'Good lighting ✅' || _brightnessStatus == 'Excellent lighting 🌟';
+        final bool goodLighting = _brightnessStatus == 'Good lighting ✅' ||
+            _brightnessStatus == 'Excellent lighting 🌟';
 
         // ✅ الأهلية تعتمد على (تمركز المركز + حجم ضمن النطاق)
-        final bool eligible = _faceDetected
-            && _insideOval
-            && sizeRaw >= _sizeCfg.rawMin
-            && sizeRaw <= _sizeCfg.rawMax
-            && goodLighting
+        final bool eligible = _faceDetected &&
+            _insideOval &&
+            sizeRaw >= _sizeCfg.rawMin &&
+            sizeRaw <= _sizeCfg.rawMax
+
+            // && goodLighting
         ;
 
         _setCaptureEligible(eligible);
@@ -557,9 +578,9 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     }
 
     final srcW = imageRawSize.height; // portrait width
-    final srcH = imageRawSize.width;  // portrait height
+    final srcH = imageRawSize.width; // portrait height
     final scale = math.max(screenSize.width / srcW, screenSize.height / srcH);
-    final dxPad = (screenSize.width  - srcW * scale) / 2.0;
+    final dxPad = (screenSize.width - srcW * scale) / 2.0;
     final dyPad = (screenSize.height - srcH * scale) / 2.0;
 
     double cx = faceCenter.dx * scale + dxPad;
@@ -570,9 +591,9 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
       cx = 2 * midX - cx;
     }
 
-    final ovalCx = screenSize.width  * (0.5 + kOvalCxOffsetPct);
+    final ovalCx = screenSize.width * (0.5 + kOvalCxOffsetPct);
     final ovalCy = screenSize.height * (0.5 + kOvalCyOffsetPct);
-    final ovalRx = (screenSize.width  * kOvalRxPct);
+    final ovalRx = (screenSize.width * kOvalRxPct);
     final ovalRy = (screenSize.height * kOvalRyPct);
 
     final offXpx = cx - ovalCx;
@@ -591,7 +612,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
 
   // سماحية: 15% خارج الحد مقبولة، أو 3 زوايا من 4 داخل
   static const double _kEdgeOverflowTol = 0.22; // 15% خارج الحد
-  static const double _kCornersNeeded = 4;      // 3 زوايا كفاية
+  static const double _kCornersNeeded = 4; // 3 زوايا كفاية
 
   // استبدل دالة _isFaceInsideOvalOnScreen بالكامل بهذه (إزالة return المكرر غير القابل للوصول)
   bool _isFaceInsideOvalOnScreen({
@@ -649,7 +670,8 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     }
     final cdxn = (ccx - ovalCx) / ovalRx;
     final cdyn = (ccy - ovalCy) / ovalRy;
-    final centerInside = (cdxn * cdxn + cdyn * cdyn) <= (1.0 + _kEdgeOverflowTol * 0.5);
+    final centerInside =
+        (cdxn * cdxn + cdyn * cdyn) <= (1.0 + _kEdgeOverflowTol * 0.5);
 
     return insideCount >= _kCornersNeeded && centerInside;
   }
@@ -663,6 +685,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
       if (!_isSnapshotting) {
         _livenessResult = null;
         _faceRecognitionResult = null;
+        _attendanceResult = null;
         _capturedFile = null;
       }
       _resetInactivity();
@@ -676,9 +699,19 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
 
     userActivity();
     Timer.periodic(const Duration(seconds: 1), (Timer t) async {
-      if (_showScreensaver) { t.cancel(); return; }
-      if (!_captureEligible) { _stopCountdown(); t.cancel(); return; }
-      if (_isSnapshotting) { t.cancel(); return; }
+      if (_showScreensaver) {
+        t.cancel();
+        return;
+      }
+      if (!_captureEligible) {
+        _stopCountdown();
+        t.cancel();
+        return;
+      }
+      if (_isSnapshotting) {
+        t.cancel();
+        return;
+      }
 
       if (_countdown != null && _countdown! > 0) {
         _countdown = _countdown! - 1;
@@ -688,7 +721,9 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
           _isSnapshotting = true;
           notifyListeners();
           t.cancel();
-          scheduleMicrotask(() async { await _handleLivenessCheck(); });
+          scheduleMicrotask(() async {
+            await _handleLivenessCheck();
+          });
         }
       }
     });
@@ -717,6 +752,9 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     final int seq = ++_captureSeq;
     _activeCaptureSeq = seq;
 
+    // ✅ إعادة تعيين علم الحضور لكل لقطة جديدة
+    _postedAttendanceForThisCapture = false;
+
     try {
       _readyForNextImage = false;
       _isDetecting = false;
@@ -733,50 +771,49 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
 
       // ===== [inside _handleLivenessCheck بعد takePicture()] استبدل بلوك الحفظ في المعرض بهذا =====
 
-// 1️⃣ التقط الصورة
+      // 1️⃣ التقط الصورة
       final XFile captured = await _controller!.takePicture();
 
-// 2️⃣ احفظ الصورة في المعرض باستخدام gallery_saver_plus (لا حاجة لطلب أذونات يدوياً)
+      // 2️⃣ احفظ الصورة في المعرض باستخدام gallery_saver_plus (لا حاجة لطلب أذونات يدوياً)
       try {
         final bool? ok = await GallerySaver.saveImage(
           captured.path,
           albumName: 'Liveness Captures', // يمكنك تغييره
-          toDcim: true,                   // اختياري: يحفظ تحت DCIM على أندرويد
+          toDcim: true, // اختياري: يحفظ تحت DCIM على أندرويد
         );
         debugPrint('✅ حفظ في المعرض: ${ok == true}');
       } catch (e) {
         debugPrint('❌ فشل الحفظ في المعرض: $e');
       }
 
-// 3️⃣ انسخ الصورة إلى مجلد التطبيق كما كان سابقاً
+      // 3️⃣ انسخ الصورة إلى مجلد التطبيق كما كان سابقاً
       final Directory dir = await getApplicationDocumentsDirectory();
-      final Directory folder = Directory(path.join(dir.path, 'liveness_captures'));
+      final Directory folder =
+      Directory(path.join(dir.path, 'liveness_captures'));
       if (!await folder.exists()) {
         await folder.create(recursive: true);
       }
-      final String filename = 'capture_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final String filename =
+          'capture_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final String savedPath = path.join(folder.path, filename);
       final File savedFile = await File(captured.path).copy(savedPath);
       _capturedFile = XFile(savedFile.path);
 
-// ✅ الباقي منطق الانتظار/الإرسال كما هو
+      // ✅ الباقي منطق الانتظار/الإرسال كما هو
       _lastFaceRect = null;
       _livenessResult = null;
       _faceRecognitionResult = null;
-
-// أعِد تشغيل عدّاد الـ screensaver
+      _attendanceResult = null;
+      // أعِد تشغيل عدّاد الـ screensaver
       _resetInactivity();
 
-// فعّل شاشة الانتظار فوق الصورة
+      // فعّل شاشة الانتظار فوق الصورة
       _waiting = true;
       _waitMessage = '';
       notifyListeners();
 
-
-
       // 2) أرسل المهام بالتوازي
       final futures = <Future<void>>[];
-
 
       if (kEnableLiveness) {
         futures.add(
@@ -784,6 +821,15 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
             if (_activeCaptureSeq != seq) return; // تجاهل نتائج متأخرة
             _livenessResult = liveJson ?? {'error': 'Invalid response'};
             notifyListeners();
+
+            // ✅ Check for liveness failure
+            // final status = _livenessResult?['status'];
+            // if (status != 'ok') {
+            //   debugPrint('[LIVENESS] Failed status: $status');
+            //   onLivenessFailed?.call();
+            //   return; // ⛔ Don't continue
+            // }
+
           }).catchError((e) {
             if (_activeCaptureSeq != seq) return;
             _livenessResult = {'error': e.toString()};
@@ -794,10 +840,14 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
 
       if (kEnableFaceRecognition) {
         futures.add(
-          _net.sendFaceRecognition(captured.path).then((recog) {
+          _net.sendFaceRecognition(captured.path).then((recog) async {
             if (_activeCaptureSeq != seq) return;
             _faceRecognitionResult = recog ?? {'error': 'Invalid response'};
+            debugPrint('_faceRecognitionResult{$_faceRecognitionResult}');
             notifyListeners();
+
+            // ✅ جرّب استدعاء الحضور مباشرة بعد توافر نتيجة التعرف
+            await _maybeAutoPostAttendance();
           }).catchError((e) {
             if (_activeCaptureSeq != seq) return;
             _faceRecognitionResult = {'error': e.toString()};
@@ -805,6 +855,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
           }),
         );
       }
+
       // 3) مهلات آمنة لمنع "التجمّد"
       // Soft timeout: غيّر الرسالة لكن لا تفرض الرجوع
       final soft = Future.delayed(
@@ -834,6 +885,9 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
       }
       // دع soft يعمل لوحده (لا حاجة للانتظار له)
       unawaited(soft);
+
+      // محاولة أخيرة بعد اكتمال الانتظار المشترك (لو ما تم النداء بعد)
+      await _maybeAutoPostAttendance();
 
       // 4) أوقف شاشة الانتظار وابدأ عدّاد العرض ثم ارجع للبث
       if (_activeCaptureSeq == seq) {
@@ -948,8 +1002,8 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
       return t * t * (3 - 2 * t);
     }
 
-    final up   = sstep(_sizeCfg.rawMin,   _sizeCfg.rawIdeal, raw);
-    final down = 1.0 - sstep(_sizeCfg.rawIdeal, _sizeCfg.rawMax,   raw);
+    final up = sstep(_sizeCfg.rawMin, _sizeCfg.rawIdeal, raw);
+    final down = 1.0 - sstep(_sizeCfg.rawIdeal, _sizeCfg.rawMax, raw);
     final peak = math.min(up, down);
     return peak.clamp(0.0, 1.0);
   }
@@ -963,9 +1017,9 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     if (screenSize == Size.zero) return 0.0;
 
     final srcW = imageRawSize.height; // portrait width
-    final srcH = imageRawSize.width;  // portrait height
+    final srcH = imageRawSize.width; // portrait height
     final scale = math.max(screenSize.width / srcW, screenSize.height / srcH);
-    final dxPad = (screenSize.width  - srcW * scale) / 2.0;
+    final dxPad = (screenSize.width - srcW * scale) / 2.0;
     final dyPad = (screenSize.height - srcH * scale) / 2.0;
 
     double cx = faceCenterRaw.dx * scale + dxPad;
@@ -976,9 +1030,9 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
       cx = 2 * midX - cx;
     }
 
-    final ovalCx = screenSize.width  * (0.5 + kOvalCxOffsetPct);
+    final ovalCx = screenSize.width * (0.5 + kOvalCxOffsetPct);
     final ovalCy = screenSize.height * (0.5 + kOvalCyOffsetPct);
-    final ovalRx = (screenSize.width  * kOvalRxPct);
+    final ovalRx = (screenSize.width * kOvalRxPct);
     final ovalRy = (screenSize.height * kOvalRyPct);
 
     final dxn = (cx - ovalCx) / (ovalRx == 0 ? 1 : ovalRx);
@@ -996,7 +1050,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
   double _estimateLuma(CameraImage image, {bool smooth = true}) {
     final group = image.format.group;
     final stepY = math.max(1, image.height ~/ 36);
-    final stepX = math.max(1, image.width  ~/ 64);
+    final stepX = math.max(1, image.width ~/ 64);
 
     int sum = 0, count = 0;
 
@@ -1014,7 +1068,8 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
           final g = bytes[idx + 1];
           final r8 = bytes[idx + 2];
           final l = ((299 * r8 + 587 * g + 114 * b) / 1000).round();
-          sum += l; count++;
+          sum += l;
+          count++;
         }
       }
     } else {
@@ -1036,13 +1091,14 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     final raw = (count == 0) ? 0.0 : (sum / count);
     if (!smooth) return raw;
     final alpha = 0.25;
-    _lumaEma = (_lumaEma == null) ? raw : (_lumaEma! + alpha * (raw - _lumaEma!));
+    _lumaEma =
+    (_lumaEma == null) ? raw : (_lumaEma! + alpha * (raw - _lumaEma!));
     return _lumaEma!.clamp(0.0, 255.0);
   }
 
   String _statusForLuma(double v) {
-    if (v <  30) return "Very dark ❌";
-    if (v <  60) return "Too dim ❌";
+    if (v < 30) return "Very dark ❌";
+    if (v < 60) return "Too dim ❌";
     if (v < 100) return "Dim light ⚠️";
     if (v < 160) return "Good lighting ✅";
     if (v < 220) return "Excellent lighting 🌟";
@@ -1097,6 +1153,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     // نظّف النتائج والبيانات
     _livenessResult = null;
     _faceRecognitionResult = null;
+    _attendanceResult = null;
     _capturedFile = null;
     _lastFaceRect = null;
     _sizeRaw = null;
@@ -1129,5 +1186,111 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
       }
     }
   }
+
+  // ======= 💡 استدعاء الحضور تلقائيًا عند توفر employee_id أو rfid =======
+  Future<void> _maybeAutoPostAttendance() async {
+    if (_postedAttendanceForThisCapture) {
+      debugPrint('[ATT] Skipped: already posted for this capture.');
+      return;
+    }
+
+    final recog = _faceRecognitionResult;
+    if (recog == null) {
+      debugPrint('[ATT] Skipped: no faceRecognitionResult yet.');
+      return;
+    }
+
+    // لطباعة الاستجابة كما هي للمراجعة
+    debugPrint('[FR][RAW] $recog');
+
+    // ==== Helpers محلية لاستخراج القيم بأمان ====
+    dynamic _get(Map m, List path) {
+      dynamic cur = m;
+      for (final k in path) {
+        if (cur is Map && cur.containsKey(k)) {
+          cur = cur[k];
+        } else {
+          return null;
+        }
+      }
+      return cur;
+    }
+
+    int? _asInt(dynamic v) {
+      if (v == null) return null;
+      if (v is int) return v;
+      if (v is String) return int.tryParse(v);
+      if (v is num) return v.toInt();
+      return null;
+    }
+
+    String? _asStr(dynamic v) {
+      if (v == null) return null;
+      if (v is String) return v.trim().isEmpty ? null : v.trim();
+      if (v is num) return v.toString();
+      return null;
+    }
+
+    // ==== جرّب جميع المسارات الشائعة ====
+    final Map<String, dynamic> R = Map<String, dynamic>.from(recog);
+
+    final employeeId = _asInt(
+        _get(R, ['employee_id']) ??
+            _get(R, ['match', 'employee_id']) ??
+            _get(R, ['match', 'employee', 'id']) ??
+            _get(R, ['match', 'employee_data', 'id'])
+    );
+
+    final rfid = _asStr(
+        _get(R, ['rfid']) ??
+            _get(R, ['match', 'rfid']) ??
+            _get(R, ['match', 'employee', 'rfid']) ??
+            _get(R, ['match', 'employee_data', 'rfid'])
+    );
+
+    // لأغراض التشخيص
+    debugPrint('[ATT][PARSED] employee_id=$employeeId, rfid=$rfid');
+
+    if (employeeId == null && (rfid == null || rfid.isEmpty)) {
+      debugPrint('[ATT] Skipped: neither employee_id nor rfid found in recog.');
+      return;
+    }
+
+    final nowStr = formatDateTime(DateTime.now());
+    debugPrint('[ATT] Posting attendance… employee_id=$employeeId, rfid=$rfid, date_time=$nowStr');
+
+    try {
+      ApiResult result;
+      if (employeeId != null) {
+        result = await AttendanceService.storeByEmployeeId(
+          employeeId: employeeId,
+          dateTime: nowStr,
+        );
+      } else {
+        result = await AttendanceService.storeByRfid(
+          rfid: rfid!, // مضمون هنا إنه غير null
+          dateTime: nowStr,
+        );
+      }
+
+      debugPrint('resultAttendance${result.ok}__${result.message}');
+      _postedAttendanceForThisCapture = true;
+
+      _lastApiOk = result.ok;
+      _lastApiMessage = result.message;
+
+      // ✅ أضف هذا السطر:
+      _attendanceResult = {
+        'status': result.ok ? 'ok' : 'error',
+        'message': result.message,
+      };
+
+      debugPrint('[ATT][RESPONSE] ok=${result.ok}, msg=${result.message}');
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[ATT][ERROR] $e');
+    }
+  }
+
 
 }

@@ -20,6 +20,31 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
   @override
   void initState() {
     super.initState();
+
+
+    c = FaceLivenessController()..init();
+
+    // ✅ ثم: عرّف رد فعل الفشل
+    c.onLivenessFailed = () {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AlertDialog(
+          title: const Text('Sorry'),
+          content: const Text('Liveness check failed. Please ensure your real face is visible and try again.'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                c.tapNextEmployee(); // Restart the camera
+              },
+              child: const Text('Try Again'),
+            ),
+          ],
+        ),
+      );
+    };
+
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -27,7 +52,7 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
       statusBarIconBrightness: Brightness.light,
       systemNavigationBarIconBrightness: Brightness.light,
     ));
-    c = FaceLivenessController()..init();
+
     glowCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 2))
       ..repeat(reverse: true);
   }
