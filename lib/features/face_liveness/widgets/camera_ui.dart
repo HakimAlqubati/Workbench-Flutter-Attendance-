@@ -41,6 +41,31 @@ class CameraUI extends StatelessWidget {
     c.captureEligible ? const Color(0xff0fd86e) : const Color(0xffffb74d);
 
     return Stack(children: [
+    Positioned.fill(
+    child: Container(
+    color: () {
+      final result = c.faceRecognitionResult;
+
+      if (result == null) {
+        return Colors.transparent; // لا نتيجة بعد
+      }
+
+      if (result['error'] != null) {
+        return Colors.red.withOpacity(0.4); // خطأ
+      }
+
+      // التحقق من وجود تطابق
+      final match = result['match'];
+      final found = (match is Map && match['found'] == true);
+
+      if (found) {
+        return Colors.green.withOpacity(0.4); // ✅ نجاح
+      } else {
+        return Colors.red.withOpacity(0.4);   // ❌ فشل
+      }
+    }(),
+    ),
+    ),
       Positioned.fill(child: basePreview),
 
       if (c.cameraOpen && c.capturedFile == null)
@@ -62,6 +87,7 @@ class CameraUI extends StatelessWidget {
           ),
         ),
 
+
       if (c.cameraOpen && c.capturedFile == null)
         Positioned.fill(
           child: IgnorePointer(
@@ -78,8 +104,9 @@ class CameraUI extends StatelessWidget {
           ),
         ),
 
+
       // عدّاد الالتقاط
-      if (c.cameraOpen && c.countdown != null && c.captureEligible)
+      if (c.cameraOpen && c.countdown != null && c.captureEligible && c.capturedFile == null)
         Positioned(
           bottom: size.height * 0.18,
           left: 0, right: 0,
@@ -123,6 +150,8 @@ class CameraUI extends StatelessWidget {
           ),
         ),
 
+
+
       if (c.cameraOpen && c.capturedFile == null)
         FaceRatioBar(
           progress: c.ratioProgress,
@@ -151,21 +180,33 @@ class CameraUI extends StatelessWidget {
         Positioned(
           bottom: MediaQuery.of(context).padding.bottom + 20,
           right: 16,
-          child: ElevatedButton.icon(
-            icon: const Icon(Icons.arrow_forward_rounded),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).primaryColor,
-              foregroundColor: Colors.white,
-              shadowColor: Colors.black54,
-              elevation: 8,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-              textStyle: const TextStyle(fontWeight: FontWeight.w800),
-            ),
-            onPressed: () async => c.tapNextEmployee(),
-            label: const Text('Next Employee'),
+          child: Builder(
+            builder: (_) {
+              final bool recoOk = _isRecognitionOk(c.faceRecognitionResult);
+              final bool showRetry = !recoOk;
+
+              final Color bg = showRetry ? Colors.red : Theme.of(context).primaryColor;
+              final IconData icon = showRetry ? Icons.refresh_rounded : Icons.arrow_forward_rounded;
+              final String label = showRetry ? 'Retry' : 'Next Employee';
+
+              return ElevatedButton.icon(
+                icon: Icon(icon),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: bg,
+                  foregroundColor: Colors.white,
+                  shadowColor: Colors.black54,
+                  elevation: 8,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                  textStyle: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                onPressed: () async => c.tapNextEmployee(),
+                label: Text(label),
+              );
+            },
           ),
         ),
+
     ]);
   }
 
@@ -182,7 +223,12 @@ class CameraUI extends StatelessWidget {
     if (c.tooClose) return "Move Back";
     return "Center Your Face";
   }
-
+  bool _isRecognitionOk(Map<String, dynamic>? j) {
+    if (j == null) return false;          // لا توجد نتيجة => اعتبرها فشل
+    if (j['error'] != null) return false; // خطأ من السيرفر
+    final m = (j['match'] is Map) ? Map<String, dynamic>.from(j['match']) : const {};
+    return m['found'] == true;            // نجاح فقط لو found=true
+  }
   String _brightnessLabel(FaceLivenessController c) {
     if (c.brightnessLevel == null) return '';
     final pct = (c.brightnessLevel!.clamp(0, 255) / 255.0) * 100.0;
@@ -312,4 +358,7 @@ class AttendanceBanner extends StatelessWidget {
       ),
     );
   }
+
+
 }
+

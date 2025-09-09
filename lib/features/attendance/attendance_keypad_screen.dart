@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:my_app/core/network_helper.dart';
 import '../settings/settings_screen.dart';
 import '../settings/settings_store.dart';
 import '../../theme/app_theme.dart';
@@ -79,6 +80,10 @@ class _AttendanceKeypadScreenState extends State<AttendanceKeypadScreen> with Si
   void _onClear() => setState(() => _input = "");
 
   Future<void> _onSubmit() async {
+    final connected = await NetworkHelper.checkAndToastConnection();
+    if (!connected) {
+      return;
+    }
     if (_input.isEmpty) return;
     setState(() {
       _loading = true;

@@ -16,6 +16,15 @@ const String kAttendanceApiUrl      = "$kApiBaseUrl/api/hr/attendance/store";
 const double kMinFaceRatio = 0.06;
 const double kFitRelaxFactor = 1.30;
 
+/// ------- UI feature flags -------
+bool get kShowSwitchCameraButton {
+  try {
+    return SettingsStore.I.value.showSwitchCameraButton;
+  } catch (_) {
+    return false; // fallback لو ما وصلت قيمة من السيرفر
+  }
+}
+
 /// ------- Ellipse window (screen %) -------
 /// ملاحظة: نستخدم getters ديناميكية لقراءة القيم من SettingsStore (إن وُجدت)
 const double kDefaultOvalRxPct = 0.42;

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:my_app/features/face_liveness/constants.dart';
 import 'package:my_app/features/face_liveness/controllers/face_liveness_controller.dart';
 import 'package:my_app/features/face_liveness/widgets/top_hud.dart';
 import 'package:my_app/features/face_liveness/widgets/camera_ui.dart';
@@ -87,6 +88,7 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
           child: Stack(
             children: [
               const Positioned.fill(child: DecoratedBox(decoration: bg)),
+
               if (c.showScreensaver)
                 Screensaver(
                   now: c.now,
@@ -118,6 +120,52 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
 
               // شريط علوي: عداد السكون (يسار) + الساعة (يمين)
               TopHud(c: c,hidden: c.showScreensaver),
+
+              // ============================
+              // ✅ زر تبديل الكاميرا (أعلى المنتصف)
+              // ============================
+              if (kShowSwitchCameraButton &&
+                  !c.showScreensaver &&           // لا تعرضه أثناء شاشة الـ Screensaver
+                  c.cameraOpen &&                 // المعاينة شغّالة
+                  c.capturedFile == null &&      // ليس بعد الالتقاط
+                  !c.waiting)                    // ليس أثناء انتظار نتائج الشبكة
+                Positioned(
+                  top: MediaQuery.of(context).padding.top + 8, // SafeArea + مسافة بسيطة
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(22),
+                        onTap: () async {
+                          await c.toggleCamera(); // ← استدعِ الدالة في الـ controller
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0x66000000), // خلفية نصف شفافة
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.cameraswitch_rounded, color: Colors.white, size: 18),
+                              const SizedBox(width: 6),
+                              Text(
+                                c.isFrontCamera ? 'Front' : 'Back',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         );

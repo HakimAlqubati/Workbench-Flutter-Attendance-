@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:my_app/core/network_helper.dart';
 import 'package:my_app/features/face_liveness/services/auth_service.dart';
 import 'dart:ui';
 
@@ -33,6 +34,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    // 🛡️ تحقق من الاتصال قبل المتابعة
+    final connected = await NetworkHelper.checkAndToastConnection();
+    if (!connected) return;
+
     setState(() { _loading = true; _error = null; });
     try {
       await _auth.login(

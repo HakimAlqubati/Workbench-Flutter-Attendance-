@@ -13,6 +13,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:gallery_saver_plus/gallery_saver.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
+import 'package:my_app/core/network_helper.dart';
 import 'package:my_app/features/attendance/attendance_service.dart';
 
 // 1) التقط الصورة واعرضها فورًا
@@ -40,7 +41,12 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
   CameraController? _controller;
   CameraController? get controller => _controller;
   CameraDescription? _frontCamera;
+  List<CameraDescription> _allCams = const [];
 
+
+  bool _useFront = true; // ✅ الحالة الحالية: true = أمامية
+  bool get isFrontCamera => _useFront;
+  CameraDescription? _rearCamera;
   // ===== Detector =====
   FaceDetector? _detector;
   bool _isDetecting = false;
@@ -278,14 +284,34 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     );
   }
 
+
   Future<void> _initCamera() async {
-    final cameras = await availableCameras();
-    _frontCamera = cameras.firstWhere(
-          (c) => c.lensDirection == CameraLensDirection.back,
-      orElse: () => cameras.first,
+    // ✅ اجلب الكاميرات مرة واحدة
+    _allCams = await availableCameras();
+
+    // ✅ حارس: لا توجد كاميرات
+    if (_allCams.isEmpty) {
+      debugPrint('❌ No cameras available');
+      return;
+    }
+
+    // ✅ عيّن الأمامية والخلفية مع orElse غير قابل لـ null
+    _frontCamera = _allCams.firstWhere(
+          (c) => c.lensDirection == CameraLensDirection.front,
+      orElse: () => _allCams.first, // non-null
     );
+    _rearCamera = _allCams.firstWhere(
+          (c) => c.lensDirection == CameraLensDirection.back,
+      orElse: () => _allCams.first, // non-null
+    );
+
+    // ✅ اختر الكاميرا الدافعة حسب العلم الحالي مع fallback منطقي
+    final CameraDescription camToUse =
+    _useFront ? (_frontCamera ?? _rearCamera!) : (_rearCamera ?? _frontCamera!);
+
+    // ✅ أنشئ الكونترولر مرة واحدة فقط باستخدام الكاميرا المختارة
     _controller = CameraController(
-      _frontCamera!,
+      camToUse,
       ResolutionPreset.medium,
       enableAudio: false,
       imageFormatGroup: ImageFormatGroup.nv21,
@@ -293,11 +319,13 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     await _controller!.initialize();
     await _controller!.lockCaptureOrientation(DeviceOrientation.portraitUp);
 
+    // ✅ خزّن حجم الإطار الأخير
     _latestImageSize = Size(
       _controller!.value.previewSize?.width ?? 1280,
       _controller!.value.previewSize?.height ?? 720,
     );
 
+    // ✅ مراقبة أخطاء المعاينة
     _controller!.addListener(() async {
       final v = _controller!.value;
       if (v.hasError) {
@@ -309,6 +337,39 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     await _startStreamSafely();
     notifyListeners();
   }
+
+
+  // Future<void> _initCamera() async {
+  //   final cameras = await availableCameras();
+  //   _frontCamera = cameras.firstWhere(
+  //         (c) => c.lensDirection == CameraLensDirection.front,
+  //     orElse: () => cameras.first,
+  //   );
+  //   _controller = CameraController(
+  //     _frontCamera!,
+  //     ResolutionPreset.medium,
+  //     enableAudio: false,
+  //     imageFormatGroup: ImageFormatGroup.nv21,
+  //   );
+  //   await _controller!.initialize();
+  //   await _controller!.lockCaptureOrientation(DeviceOrientation.portraitUp);
+  //
+  //   _latestImageSize = Size(
+  //     _controller!.value.previewSize?.width ?? 1280,
+  //     _controller!.value.previewSize?.height ?? 720,
+  //   );
+  //
+  //   _controller!.addListener(() async {
+  //     final v = _controller!.value;
+  //     if (v.hasError) {
+  //       await _stopStreamSafely();
+  //       await _startStreamSafely();
+  //     }
+  //   });
+  //
+  //   await _startStreamSafely();
+  //   notifyListeners();
+  // }
 
   Future<void> _disposeCamera() async {
     try {
@@ -486,7 +547,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
         final rawH = image.height.toDouble();
 
         final bool isFront =
-            _frontCamera?.lensDirection == CameraLensDirection.back;
+            _frontCamera?.lensDirection == CameraLensDirection.front;
 
         // داخل/مركز البيضاوي
         _insideOval = _isFaceInsideOvalOnScreen(
@@ -541,7 +602,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
             sizeRaw >= _sizeCfg.rawMin &&
             sizeRaw <= _sizeCfg.rawMax
 
-            // && goodLighting
+            && goodLighting
         ;
 
         _setCaptureEligible(eligible);
@@ -816,7 +877,15 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
       final futures = <Future<void>>[];
 
       if (kEnableLiveness) {
+        final connected = await NetworkHelper.checkAndToastConnection();
+        if (!connected) {
+          _livenessResult = {'error': 'Check Your Internet Connection '};
+          _waiting = false;
+          notifyListeners();
+          return;
+        }
         futures.add(
+
           _net.sendLiveness(captured.path).then((liveJson) {
             if (_activeCaptureSeq != seq) return; // تجاهل نتائج متأخرة
             _livenessResult = liveJson ?? {'error': 'Invalid response'};
@@ -839,6 +908,12 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
       }
 
       if (kEnableFaceRecognition) {
+        // ✅ تحقق من الاتصال أولاً
+        final connected = await NetworkHelper.checkAndToastConnection();
+        if (!connected) {
+          return;
+        }
+
         futures.add(
           _net.sendFaceRecognition(captured.path).then((recog) async {
             if (_activeCaptureSeq != seq) return;
@@ -847,7 +922,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
             notifyListeners();
 
             // ✅ جرّب استدعاء الحضور مباشرة بعد توافر نتيجة التعرف
-            await _maybeAutoPostAttendance();
+            // await _maybeAutoPostAttendance();
           }).catchError((e) {
             if (_activeCaptureSeq != seq) return;
             _faceRecognitionResult = {'error': e.toString()};
@@ -868,27 +943,13 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
         },
       );
 
-      // Hard timeout: ابدأ العدّاد حتى لو النتائج لم تكتمل
-      final hard = Future.delayed(
-        Duration(milliseconds: kHardTimeoutMs),
-      );
 
-      // انتظر اكتمال النتائج أو hard timeout (أيهما أولًا)
-      if (futures.isEmpty) {
-        // لا يوجد مهام أصلاً: اعتبرها مكتملة فورًا
-        await Future.delayed(Duration(milliseconds: 50));
-      } else {
-        await Future.any([
-          Future.wait(futures).catchError((_) {}),
-          hard,
-        ]);
-      }
-      // دع soft يعمل لوحده (لا حاجة للانتظار له)
-      unawaited(soft);
 
-      // محاولة أخيرة بعد اكتمال الانتظار المشترك (لو ما تم النداء بعد)
+// ✅ انتظر اكتمال liveness + recognition قبل أي شيء
+      await Future.wait(futures);
+
+// ✅ الآن وبعد توفر النتائج، قرّر وأرسل الحضور (إن لزم) وانتظر اكتماله
       await _maybeAutoPostAttendance();
-
       // 4) أوقف شاشة الانتظار وابدأ عدّاد العرض ثم ارجع للبث
       if (_activeCaptureSeq == seq) {
         _waiting = false;
@@ -1187,7 +1248,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     }
   }
 
-  // ======= 💡 استدعاء الحضور تلقائيًا عند توفر employee_id أو rfid =======
+  // ======= 💡 استدعاء الحضور تلقائيًا عند توفر employee_id   =======
   Future<void> _maybeAutoPostAttendance() async {
     if (_postedAttendanceForThisCapture) {
       debugPrint('[ATT] Skipped: already posted for this capture.');
@@ -1202,6 +1263,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
 
     // لطباعة الاستجابة كما هي للمراجعة
     debugPrint('[FR][RAW] $recog');
+
 
     // ==== Helpers محلية لاستخراج القيم بأمان ====
     dynamic _get(Map m, List path) {
@@ -1241,37 +1303,28 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
             _get(R, ['match', 'employee_data', 'id'])
     );
 
-    final rfid = _asStr(
-        _get(R, ['rfid']) ??
-            _get(R, ['match', 'rfid']) ??
-            _get(R, ['match', 'employee', 'rfid']) ??
-            _get(R, ['match', 'employee_data', 'rfid'])
-    );
 
-    // لأغراض التشخيص
-    debugPrint('[ATT][PARSED] employee_id=$employeeId, rfid=$rfid');
 
-    if (employeeId == null && (rfid == null || rfid.isEmpty)) {
-      debugPrint('[ATT] Skipped: neither employee_id nor rfid found in recog.');
+
+    if (employeeId == null) {
+      debugPrint('[ATT] Skipped: neither employee_id  found in recog.');
       return;
     }
 
     final nowStr = formatDateTime(DateTime.now());
-    debugPrint('[ATT] Posting attendance… employee_id=$employeeId, rfid=$rfid, date_time=$nowStr');
 
     try {
       ApiResult result;
-      if (employeeId != null) {
-        result = await AttendanceService.storeByEmployeeId(
-          employeeId: employeeId,
-          dateTime: nowStr,
-        );
-      } else {
-        result = await AttendanceService.storeByRfid(
-          rfid: rfid!, // مضمون هنا إنه غير null
-          dateTime: nowStr,
-        );
+      if (employeeId == null) {
+        debugPrint('[ATT] Skip: employee_id is null, not posting attendance.');
+        return;
       }
+
+      result = await AttendanceService.storeByEmployeeId(
+        employeeId: employeeId,
+        dateTime: nowStr,
+      );
+
 
       debugPrint('resultAttendance${result.ok}__${result.message}');
       _postedAttendanceForThisCapture = true;
@@ -1289,6 +1342,38 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
       notifyListeners();
     } catch (e) {
       debugPrint('[ATT][ERROR] $e');
+    }
+  }
+  Future<void> toggleCamera() async {
+    final hasFront = _frontCamera != null;
+    final hasRear  = _rearCamera  != null;
+
+    if (!(hasFront && hasRear)) {
+      debugPrint('ℹ️ Only one camera available; toggle ignored.');
+      return;
+    }
+
+    try {
+      await _stopStreamSafely();
+      await _disposeCamera();
+
+      _useFront = !_useFront; // ✅ قلب الاختيار بين الأمامية والخلفية
+
+      // نظّف الحالة
+      _capturedFile = null;
+      _livenessResult = null;
+      _faceRecognitionResult = null;
+      _attendanceResult = null;
+      _ratioProgress = 0.0;
+      _insideOval = false;
+      _faceDetected = false;
+      _setCaptureEligible(false);
+      notifyListeners();
+
+      await _initCamera();   // ✅ أعد فتح الكاميرا الجديدة
+      _resetInactivity();
+    } catch (e) {
+      debugPrint('❌ toggleCamera error: $e');
     }
   }
 

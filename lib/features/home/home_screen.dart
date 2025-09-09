@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:my_app/core/navigation/routes.dart';
+import 'package:my_app/core/network_helper.dart';
 import 'package:my_app/core/widgets/app_watermark.dart';
 import 'package:my_app/features/face_liveness/services/auth_service.dart';
 import 'package:my_app/features/face_liveness/views/face_liveness_screen.dart';
@@ -8,14 +9,31 @@ import 'widgets/big_action_button.dart';
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
-  void _openCamera(BuildContext context) {
+  void _openCamera(BuildContext context) async  {
+    final connected = await NetworkHelper.checkAndToastConnection();
+    if (!connected) {
+      return;
+    }
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const FaceLivenessScreen()),
     );
   }
 
-  void _openSettings(BuildContext context) {
+  Future<void> _openKeypad(BuildContext context) async {
+    final connected = await NetworkHelper.checkAndToastConnection();
+    if (!connected) {
+      return;
+    }
+    Navigator.pushNamed(context, AppRoutes.attendanceKeypad);
+  }
+
+
+  void _openSettings(BuildContext context) async {
+    final connected = await NetworkHelper.checkAndToastConnection();
+    if (!connected) {
+      return;
+    }
     Navigator.pushNamed(context, AppRoutes.settings);
   }
 
@@ -58,27 +76,41 @@ class HomeScreen extends StatelessWidget {
         title: const Text("Face Liveness"),
         centerTitle: true,
         actions: [
-          PopupMenuButton<_MenuAction>(
-            onSelected: (value) {
-              switch (value) {
-                case _MenuAction.settings:
-                  _openSettings(context);
-                  break;
-              }
-            },
-            itemBuilder: (ctx) => const [
-              PopupMenuItem(
-                value: _MenuAction.settings,
-                child: ListTile(
-                  leading: Icon(Icons.settings),
-                  title: Text('Settings'),
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () => _openSettings(context),
+            onLongPress: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Open settings'),
+                  duration: Duration(seconds: 2),
                 ),
-              ),
-            ],
+              );
+            },
           ),
         ],
+        // actions: [
+        //   PopupMenuButton<_MenuAction>(
+        //     onSelected: (value) {
+        //       switch (value) {
+        //         case _MenuAction.settings:
+        //           _openSettings(context);
+        //           break;
+        //       }
+        //     },
+        //     itemBuilder: (ctx) => const [
+        //       PopupMenuItem(
+        //         value: _MenuAction.settings,
+        //         child: ListTile(
+        //           leading: Icon(Icons.settings),
+        //           title: Text('Settings'),
+        //           dense: true,
+        //           contentPadding: EdgeInsets.zero,
+        //         ),
+        //       ),
+        //     ],
+        //   ),
+        // ],
       ),
       body: Stack(
         children: [
@@ -102,8 +134,7 @@ class HomeScreen extends StatelessWidget {
                       BigActionButton(
                         icon: Icons.dialpad_rounded,
                         title: 'Attendance Keypad',
-                        onPressed: () =>
-                            Navigator.pushNamed(context, AppRoutes.attendanceKeypad),
+                        onPressed: () => _openKeypad(context),
                       ),
                     ],
                   ),
