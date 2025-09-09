@@ -836,16 +836,16 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
       final XFile captured = await _controller!.takePicture();
 
       // 2️⃣ احفظ الصورة في المعرض باستخدام gallery_saver_plus (لا حاجة لطلب أذونات يدوياً)
-      try {
-        final bool? ok = await GallerySaver.saveImage(
-          captured.path,
-          albumName: 'Liveness Captures', // يمكنك تغييره
-          toDcim: true, // اختياري: يحفظ تحت DCIM على أندرويد
-        );
-        debugPrint('✅ حفظ في المعرض: ${ok == true}');
-      } catch (e) {
-        debugPrint('❌ فشل الحفظ في المعرض: $e');
-      }
+      // try {
+      //   final bool? ok = await GallerySaver.saveImage(
+      //     captured.path,
+      //     albumName: 'Liveness Captures', // يمكنك تغييره
+      //     toDcim: true, // اختياري: يحفظ تحت DCIM على أندرويد
+      //   );
+      //   debugPrint('✅ حفظ في المعرض: ${ok == true}');
+      // } catch (e) {
+      //   debugPrint('❌ فشل الحفظ في المعرض: $e');
+      // }
 
       // 3️⃣ انسخ الصورة إلى مجلد التطبيق كما كان سابقاً
       final Directory dir = await getApplicationDocumentsDirectory();
