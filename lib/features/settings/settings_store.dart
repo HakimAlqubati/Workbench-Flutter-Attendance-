@@ -14,6 +14,14 @@ const _kKeyEnableFaceRecognition      = 'settings.enable_face_recognition';
 const _kKeyShowSwitchCameraButton     = 'settings.show_switch_camera_button';
 const _kKeySettingsUpdatedAt          = 'settings.updated_at_iso';
 
+// 🆕 Face thresholds keys
+const _kKeyFaceRawMin                 = 'settings.face_raw_min';
+const _kKeyFaceRawIdeal               = 'settings.face_raw_ideal';
+const _kKeyFaceRawMax                 = 'settings.face_raw_max';
+
+// 🆕 Crop scale key
+const _kKeyCropScale                  = 'settings.crop_scale';
+
 /// -------- القيم الافتراضية --------
 const _kDefaultCountdownSeconds       = 5;
 const _kDefaultScreensaverSeconds     = 59;
@@ -21,6 +29,14 @@ const _kDefaultOvalRxPct              = kDefaultOvalRxPct;
 const _kDefaultOvalRyPct              = kDefaultOvalRyPct;
 const _kDefaultEnableFaceRecognition  = false;
 const _kDefaultShowSwitchCameraButton = false;
+
+// 🆕 Face thresholds defaults
+const _kDefaultFaceRawMin             = 0.20;
+const _kDefaultFaceRawIdeal           = 0.22;
+const _kDefaultFaceRawMax             = 0.50;
+
+// 🆕 Crop scale default
+const _kDefaultCropScale              = 0.7;
 
 /// -------- رابط API للإعدادات --------
 const _kSettingsApiUrl = '$kApiBaseUrl/api/app/settings';
@@ -33,7 +49,13 @@ class AppSettings {
   final double ovalRyPct;
   final bool enableFaceRecognition;
   final bool showSwitchCameraButton;
+  final double cropScale;
   final String? updatedAtIso; // من السيرفر (اختياري)
+
+  // 🆕 Face thresholds
+  final double faceRawMin;
+  final double faceRawIdeal;
+  final double faceRawMax;
 
   const AppSettings({
     required this.countdownSeconds,
@@ -42,6 +64,10 @@ class AppSettings {
     required this.ovalRyPct,
     required this.enableFaceRecognition,
     required this.showSwitchCameraButton,
+    required this.faceRawMin,
+    required this.faceRawIdeal,
+    required this.faceRawMax,
+    required this.cropScale,
     this.updatedAtIso,
   });
 
@@ -52,6 +78,10 @@ class AppSettings {
     double? ovalRyPct,
     bool? enableFaceRecognition,
     bool? showSwitchCameraButton,
+    double? faceRawMin,
+    double? faceRawIdeal,
+    double? faceRawMax,
+    double? cropScale,
     String? updatedAtIso,
   }) {
     return AppSettings(
@@ -60,8 +90,11 @@ class AppSettings {
       ovalRxPct: ovalRxPct ?? this.ovalRxPct,
       ovalRyPct: ovalRyPct ?? this.ovalRyPct,
       enableFaceRecognition: enableFaceRecognition ?? this.enableFaceRecognition,
-      showSwitchCameraButton:
-      showSwitchCameraButton ?? this.showSwitchCameraButton,
+      showSwitchCameraButton: showSwitchCameraButton ?? this.showSwitchCameraButton,
+      faceRawMin: faceRawMin ?? this.faceRawMin,
+      faceRawIdeal: faceRawIdeal ?? this.faceRawIdeal,
+      faceRawMax: faceRawMax ?? this.faceRawMax,
+      cropScale: cropScale ?? this.cropScale,
       updatedAtIso: updatedAtIso ?? this.updatedAtIso,
     );
   }
@@ -72,27 +105,33 @@ class AppSettings {
         required AppSettings fallback,
       }) {
     return fallback.copyWith(
-      // إذا أرسلت حقول إضافية من السيرفر لاحقًا، أضفها هنا بنفس النمط
-      showSwitchCameraButton:
-      (json['showSwitchCameraButton'] as bool?) ??
-          fallback.showSwitchCameraButton,
-      updatedAtIso: (json['updatedAt'] as String?) ?? fallback.updatedAtIso,
+      countdownSeconds: json['countdownSeconds'] as int? ?? fallback.countdownSeconds,
+      screensaverSeconds: json['screensaverSeconds'] as int? ?? fallback.screensaverSeconds,
+      ovalRxPct: (json['ovalRxPct'] as num?)?.toDouble() ?? fallback.ovalRxPct,
+      ovalRyPct: (json['ovalRyPct'] as num?)?.toDouble() ?? fallback.ovalRyPct,
+      enableFaceRecognition: json['enableFaceRecognition'] as bool? ?? fallback.enableFaceRecognition,
+      showSwitchCameraButton: json['showSwitchCameraButton'] as bool? ?? fallback.showSwitchCameraButton,
+      faceRawMin: (json['faceRawMin'] as num?)?.toDouble() ?? fallback.faceRawMin,
+      faceRawIdeal: (json['faceRawIdeal'] as num?)?.toDouble() ?? fallback.faceRawIdeal,
+      faceRawMax: (json['faceRawMax'] as num?)?.toDouble() ?? fallback.faceRawMax,
+      cropScale: (json['cropScale'] as num?)?.toDouble() ?? fallback.cropScale,
+      updatedAtIso: json['updatedAt'] as String? ?? fallback.updatedAtIso,
     );
   }
 
   /// إنشاء من التخزين المحلي
   factory AppSettings.fromPrefs(SharedPreferences prefs) {
     return AppSettings(
-      countdownSeconds:
-      prefs.getInt(_kKeyCountdownSeconds) ?? _kDefaultCountdownSeconds,
-      screensaverSeconds:
-      prefs.getInt(_kKeyScreensaverSeconds) ?? _kDefaultScreensaverSeconds,
+      countdownSeconds: prefs.getInt(_kKeyCountdownSeconds) ?? _kDefaultCountdownSeconds,
+      screensaverSeconds: prefs.getInt(_kKeyScreensaverSeconds) ?? _kDefaultScreensaverSeconds,
       ovalRxPct: prefs.getDouble(_kKeyOvalRxPct) ?? _kDefaultOvalRxPct,
       ovalRyPct: prefs.getDouble(_kKeyOvalRyPct) ?? _kDefaultOvalRyPct,
-      enableFaceRecognition:
-      prefs.getBool(_kKeyEnableFaceRecognition) ?? _kDefaultEnableFaceRecognition,
-      showSwitchCameraButton:
-      prefs.getBool(_kKeyShowSwitchCameraButton) ?? _kDefaultShowSwitchCameraButton,
+      enableFaceRecognition: prefs.getBool(_kKeyEnableFaceRecognition) ?? _kDefaultEnableFaceRecognition,
+      showSwitchCameraButton: prefs.getBool(_kKeyShowSwitchCameraButton) ?? _kDefaultShowSwitchCameraButton,
+      faceRawMin: prefs.getDouble(_kKeyFaceRawMin) ?? _kDefaultFaceRawMin,
+      faceRawIdeal: prefs.getDouble(_kKeyFaceRawIdeal) ?? _kDefaultFaceRawIdeal,
+      faceRawMax: prefs.getDouble(_kKeyFaceRawMax) ?? _kDefaultFaceRawMax,
+      cropScale: prefs.getDouble(_kKeyCropScale) ?? _kDefaultCropScale,
       updatedAtIso: prefs.getString(_kKeySettingsUpdatedAt),
     );
   }
@@ -105,6 +144,10 @@ class AppSettings {
     await prefs.setDouble(_kKeyOvalRyPct, ovalRyPct);
     await prefs.setBool(_kKeyEnableFaceRecognition, enableFaceRecognition);
     await prefs.setBool(_kKeyShowSwitchCameraButton, showSwitchCameraButton);
+    await prefs.setDouble(_kKeyFaceRawMin, faceRawMin);
+    await prefs.setDouble(_kKeyFaceRawIdeal, faceRawIdeal);
+    await prefs.setDouble(_kKeyFaceRawMax, faceRawMax);
+    await prefs.setDouble(_kKeyCropScale, cropScale);
     if (updatedAtIso != null) {
       await prefs.setString(_kKeySettingsUpdatedAt, updatedAtIso!);
     }
@@ -124,6 +167,10 @@ class SettingsStore {
       ovalRyPct: _kDefaultOvalRyPct,
       enableFaceRecognition: _kDefaultEnableFaceRecognition,
       showSwitchCameraButton: _kDefaultShowSwitchCameraButton,
+      faceRawMin: _kDefaultFaceRawMin,
+      faceRawIdeal: _kDefaultFaceRawIdeal,
+      faceRawMax: _kDefaultFaceRawMax,
+      cropScale: _kDefaultCropScale,
       updatedAtIso: null,
     ),
   );
@@ -143,25 +190,22 @@ class SettingsStore {
     await refreshFromServer(silent: true);
   }
 
-  /// تحديث من السيرفر (يمكن استدعاؤها من Settings screen لإعادة التحميل)
+  /// تحديث من السيرفر
   Future<void> refreshFromServer({bool silent = false}) async {
     try {
       final res = await http.get(
         Uri.parse(_kSettingsApiUrl),
         headers: const {
           'Accept': 'application/json',
-          // إذا عندك توكن/هيدر أضفه هنا
         },
       );
 
       if (res.statusCode == 200) {
         final Map<String, dynamic> data = jsonDecode(res.body);
-        // ابدأ من القيمة الحالية (أو من prefs)، ثم حدّث حقول السيرفر
         final merged = AppSettings.fromServerJson(
           data,
           fallback: value,
         );
-
         notifier.value = merged;
         await merged.saveToPrefs(_prefs!);
       } else {
@@ -208,10 +252,32 @@ class SettingsStore {
     await next.saveToPrefs(_prefs!);
   }
 
-  /// إظهار/إخفاء زر تبديل الكاميرا (محليًا)
-  /// ملاحظة: هذا لا يكتب للسيرفر، إذا أردت الكتابة للسيرفر وفّر Endpoint PUT/POST.
   Future<void> setShowSwitchCameraButton(bool show) async {
     final next = value.copyWith(showSwitchCameraButton: show);
+    notifier.value = next;
+    await next.saveToPrefs(_prefs!);
+  }
+
+  Future<void> setFaceRawMin(double min) async {
+    final next = value.copyWith(faceRawMin: min);
+    notifier.value = next;
+    await next.saveToPrefs(_prefs!);
+  }
+
+  Future<void> setFaceRawIdeal(double ideal) async {
+    final next = value.copyWith(faceRawIdeal: ideal);
+    notifier.value = next;
+    await next.saveToPrefs(_prefs!);
+  }
+
+  Future<void> setFaceRawMax(double max) async {
+    final next = value.copyWith(faceRawMax: max);
+    notifier.value = next;
+    await next.saveToPrefs(_prefs!);
+  }
+
+  Future<void> setCropScale(double scale) async {
+    final next = value.copyWith(cropScale: scale);
     notifier.value = next;
     await next.saveToPrefs(_prefs!);
   }

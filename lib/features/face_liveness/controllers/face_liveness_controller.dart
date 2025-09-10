@@ -6,12 +6,12 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
-
+import 'package:image/image.dart' as img;
+import 'package:gallery_saver_plus/gallery_saver.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
-import 'package:gallery_saver_plus/gallery_saver.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:my_app/core/network_helper.dart';
 import 'package:my_app/features/attendance/attendance_service.dart';
@@ -790,6 +790,49 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     });
     notifyListeners();
   }
+  /// قص صورة داخل بيضاوي (Oval) حسب أبعاد الشاشة
+  Future<File> cropToOval(File originalFile, Size screenSize, {double scale = 1.0}) async {
+    final bytes = await originalFile.readAsBytes();
+    final src = img.decodeImage(bytes)!;
+
+    // أبعاد البيضاوي بالنسبة للصورة نفسها
+    final ovalCx = src.width * (0.5 + kOvalCxOffsetPct);
+    final ovalCy = src.height * (0.5 + kOvalCyOffsetPct);
+    final ovalRx = src.width * kOvalRxPct;
+    final ovalRy = src.height * kOvalRyPct;
+
+    // المستطيل المحيط بالبيضاوي
+    final left   = (ovalCx - ovalRx).clamp(0, src.width - 1).toInt();
+    final top    = (ovalCy - ovalRy).clamp(0, src.height - 1).toInt();
+    final right  = (ovalCx + ovalRx).clamp(0, src.width - 1).toInt();
+    final bottom = (ovalCy + ovalRy).clamp(0, src.height - 1).toInt();
+
+    // ✅ اجعلها مربعة
+    int side = math.min(right - left, bottom - top);
+
+    // ✅ طبّق التكبير/التصغير
+    side = (side * scale).toInt().clamp(10, math.min(src.width, src.height));
+
+    // ✅ قص مربع متمركز
+    final squareLeft = (ovalCx - side / 2).clamp(0, src.width - side).toInt();
+    final squareTop  = (ovalCy - side / 2).clamp(0, src.height - side).toInt();
+
+    final croppedSquare = img.copyCrop(
+      src,
+      x: squareLeft,
+      y: squareTop,
+      width: side,
+      height: side,
+    );
+
+    // حفظ الصورة
+    final croppedPath = originalFile.path.replaceFirst('.jpg', '_square.jpg');
+    final croppedFile = File(croppedPath)
+      ..writeAsBytesSync(img.encodeJpg(croppedSquare, quality: 95));
+
+    return croppedFile;
+  }
+
 
   void _stopCountdown({bool force = false}) {
     if (_isSnapshotting && !force) return;
@@ -813,7 +856,6 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     final int seq = ++_captureSeq;
     _activeCaptureSeq = seq;
 
-    // ✅ إعادة تعيين علم الحضور لكل لقطة جديدة
     _postedAttendanceForThisCapture = false;
 
     try {
@@ -830,75 +872,59 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
         return;
       }
 
-      // ===== [inside _handleLivenessCheck بعد takePicture()] استبدل بلوك الحفظ في المعرض بهذا =====
-
       // 1️⃣ التقط الصورة
       final XFile captured = await _controller!.takePicture();
 
-      // 2️⃣ احفظ الصورة في المعرض باستخدام gallery_saver_plus (لا حاجة لطلب أذونات يدوياً)
-      // try {
-      //   final bool? ok = await GallerySaver.saveImage(
-      //     captured.path,
-      //     albumName: 'Liveness Captures', // يمكنك تغييره
-      //     toDcim: true, // اختياري: يحفظ تحت DCIM على أندرويد
-      //   );
-      //   debugPrint('✅ حفظ في المعرض: ${ok == true}');
-      // } catch (e) {
-      //   debugPrint('❌ فشل الحفظ في المعرض: $e');
-      // }
-
-      // 3️⃣ انسخ الصورة إلى مجلد التطبيق كما كان سابقاً
+      // 2️⃣ انسخ الصورة للمجلد الخاص بالتطبيق
       final Directory dir = await getApplicationDocumentsDirectory();
-      final Directory folder =
-      Directory(path.join(dir.path, 'liveness_captures'));
+      final Directory folder = Directory(path.join(dir.path, 'liveness_captures'));
       if (!await folder.exists()) {
         await folder.create(recursive: true);
       }
-      final String filename =
-          'capture_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final String filename = 'capture_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final String savedPath = path.join(folder.path, filename);
       final File savedFile = await File(captured.path).copy(savedPath);
-      _capturedFile = XFile(savedFile.path);
 
-      // ✅ الباقي منطق الانتظار/الإرسال كما هو
+      // ✂️ قص الصورة بالبيضاوي
+      final File ovalFile = await cropToOval(savedFile, _screenSize,scale: kCropScale);
+
+      // 3️⃣ حفظ الصورة المقصوصة في المعرض (اختياري)
+      await GallerySaver.saveImage(ovalFile.path, albumName: 'LivenessCaptures');
+
+      // ✅ اعتمد الصورة المقصوصة فقط
+      _capturedFile = XFile(ovalFile.path);
+
+      // (اختياري) احتفظ بنسخة في مجلد التطبيق
+      final String ovalSavedPath = path.join(folder.path, 'oval_${DateTime.now().millisecondsSinceEpoch}.jpg');
+      await File(ovalFile.path).copy(ovalSavedPath);
+
+      // إعادة ضبط الحالة
       _lastFaceRect = null;
       _livenessResult = null;
       _faceRecognitionResult = null;
       _attendanceResult = null;
-      // أعِد تشغيل عدّاد الـ screensaver
       _resetInactivity();
 
-      // فعّل شاشة الانتظار فوق الصورة
       _waiting = true;
       _waitMessage = '';
       notifyListeners();
 
-      // 2) أرسل المهام بالتوازي
+      // إرسال المهام (liveness + recognition)
       final futures = <Future<void>>[];
 
       if (kEnableLiveness) {
         final connected = await NetworkHelper.checkAndToastConnection();
         if (!connected) {
-          _livenessResult = {'error': 'Check Your Internet Connection '};
+          _livenessResult = {'error': 'Check Your Internet Connection'};
           _waiting = false;
           notifyListeners();
           return;
         }
         futures.add(
-
-          _net.sendLiveness(captured.path).then((liveJson) {
-            if (_activeCaptureSeq != seq) return; // تجاهل نتائج متأخرة
+          _net.sendLiveness(ovalFile.path).then((liveJson) {
+            if (_activeCaptureSeq != seq) return;
             _livenessResult = liveJson ?? {'error': 'Invalid response'};
             notifyListeners();
-
-            // ✅ Check for liveness failure
-            // final status = _livenessResult?['status'];
-            // if (status != 'ok') {
-            //   debugPrint('[LIVENESS] Failed status: $status');
-            //   onLivenessFailed?.call();
-            //   return; // ⛔ Don't continue
-            // }
-
           }).catchError((e) {
             if (_activeCaptureSeq != seq) return;
             _livenessResult = {'error': e.toString()};
@@ -907,22 +933,19 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
         );
       }
 
-      if (kEnableFaceRecognition) {
-        // ✅ تحقق من الاتصال أولاً
+      await Future.wait(futures);
+      if (kEnableFaceRecognition  &&
+          _livenessResult != null &&
+          _livenessResult?['status'] == 'ok' &&
+          _livenessResult?['result']?['liveness'] == true) {
         final connected = await NetworkHelper.checkAndToastConnection();
-        if (!connected) {
-          return;
-        }
+        if (!connected) return;
 
         futures.add(
-          _net.sendFaceRecognition(captured.path).then((recog) async {
+          _net.sendFaceRecognition(ovalFile.path).then((recog) async {
             if (_activeCaptureSeq != seq) return;
             _faceRecognitionResult = recog ?? {'error': 'Invalid response'};
-            debugPrint('_faceRecognitionResult{$_faceRecognitionResult}');
             notifyListeners();
-
-            // ✅ جرّب استدعاء الحضور مباشرة بعد توافر نتيجة التعرف
-            // await _maybeAutoPostAttendance();
           }).catchError((e) {
             if (_activeCaptureSeq != seq) return;
             _faceRecognitionResult = {'error': e.toString()};
@@ -931,33 +954,24 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
         );
       }
 
-      // 3) مهلات آمنة لمنع "التجمّد"
-      // Soft timeout: غيّر الرسالة لكن لا تفرض الرجوع
-      final soft = Future.delayed(
-        Duration(milliseconds: kSoftTimeoutMs),
-            () {
-          if (_activeCaptureSeq == seq && _waiting) {
-            _waitMessage = 'Taking longer than usual…';
-            notifyListeners();
-          }
-        },
-      );
+      // Soft timeout
+      Future.delayed(Duration(milliseconds: kSoftTimeoutMs), () {
+        if (_activeCaptureSeq == seq && _waiting) {
+          _waitMessage = 'Taking longer than usual…';
+          notifyListeners();
+        }
+      });
 
-
-
-// ✅ انتظر اكتمال liveness + recognition قبل أي شيء
       await Future.wait(futures);
 
-// ✅ الآن وبعد توفر النتائج، قرّر وأرسل الحضور (إن لزم) وانتظر اكتماله
       await _maybeAutoPostAttendance();
-      // 4) أوقف شاشة الانتظار وابدأ عدّاد العرض ثم ارجع للبث
+
       if (_activeCaptureSeq == seq) {
         _waiting = false;
         notifyListeners();
         await _startDisplayAndResume(seq: seq);
       }
     } catch (_) {
-      // خطأ عام: أعرض بانر خطأ قصير ثم ارجع
       _livenessResult ??= {'error': 'Error sending image to backend!'};
       _waiting = false;
       notifyListeners();

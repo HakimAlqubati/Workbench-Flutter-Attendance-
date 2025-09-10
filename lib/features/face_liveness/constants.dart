@@ -103,6 +103,33 @@ bool get kEnableFaceRecognition {
 const double kCenterEpsilonPct = 0.18; // جرّب 0.15..0.22 حسب ذوقك
 
 /// ------- Face size thresholds (faceShort/imgShort) -------
+
+/// ------- Face size thresholds (faceShort/imgShort) -------
+double get kFaceRawMin {
+  try {
+    return SettingsStore.I.value.faceRawMin;
+  } catch (_) {
+    return 0.20;
+  }
+}
+
+double get kFaceRawIdeal {
+  try {
+    return SettingsStore.I.value.faceRawIdeal;
+  } catch (_) {
+    return 0.22;
+  }
+}
+
+double get kFaceRawMax {
+  try {
+    return SettingsStore.I.value.faceRawMax;
+  } catch (_) {
+    return 0.50;
+  }
+}
+
+/// Class لتعريف إعدادات افتراضية
 class FaceSizeThresholds {
   final double rawMin;   // أصغر نسبة مقبولة (لو أقل ⇒ بعيد)
   final double rawIdeal; // النسبة المثلى
@@ -120,4 +147,14 @@ class FaceSizeThresholds {
     rawIdeal: 0.22, // مثالي
     rawMax: 0.50,   // قريب جداً
   );
+}
+
+/// ------- Crop scale factor -------
+/// 0.7 = الحجم الطبيعي, >1 = تكبير, <1 = تصغير
+double get kCropScale {
+  try {
+    return SettingsStore.I.value.cropScale;
+  } catch (_) {
+    return 0.7; // fallback
+  }
 }

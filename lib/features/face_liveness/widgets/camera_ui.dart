@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:camera/camera.dart';
@@ -29,7 +30,7 @@ class CameraUI extends StatelessWidget {
       transform: Matrix4.identity()..rotateY(math.pi),
       child: ClipPath(
         clipper: OvalClipper(size),
-        child: Image.file(File(c.capturedFile!.path), fit: BoxFit.cover),
+        child: Image.file(File(c.capturedFile!.path), fit: BoxFit.scaleDown),
       ),
     )
         : (cam != null && cam.value.isInitialized)
@@ -44,25 +45,38 @@ class CameraUI extends StatelessWidget {
     Positioned.fill(
     child: Container(
     color: () {
-      final result = c.faceRecognitionResult;
+      final live = c.livenessResult;
+      final reco = c.faceRecognitionResult;
+      final attendance = c.attendanceResult;
 
-      if (result == null) {
-        return Colors.transparent; // لا نتيجة بعد
+      final bool? liveOk = (live == null)
+          ? null
+          : (live['status'] == 'ok' &&
+          live['result']?['liveness'] == true);
+
+      final bool? recoOk = (reco == null)
+          ? null
+          : (reco['match'] is Map &&
+          (reco['match']['found'] == true));
+
+      final bool? attOk = (attendance == null)
+          ? null
+          : (attendance['status'] == 'ok');
+
+// 👇 الحالة الافتراضية = أسود (ما في رد)
+      if (liveOk == null || recoOk == null || attOk == null) {
+        return Colors.black.withOpacity(0.5);
       }
 
-      if (result['error'] != null) {
-        return Colors.red.withOpacity(0.4); // خطأ
+// 👇 إذا الثلاثة ناجحين → أخضر
+      if (liveOk && recoOk && attOk) {
+        return Colors.green.withOpacity(0.5);
       }
 
-      // التحقق من وجود تطابق
-      final match = result['match'];
-      final found = (match is Map && match['found'] == true);
+// 👇 إذا واحد أو أكثر false → أحمر
+      return Colors.red.withOpacity(0.5);
 
-      if (found) {
-        return Colors.green.withOpacity(0.4); // ✅ نجاح
-      } else {
-        return Colors.red.withOpacity(0.4);   // ❌ فشل
-      }
+
     }(),
     ),
     ),
@@ -182,8 +196,15 @@ class CameraUI extends StatelessWidget {
           right: 16,
           child: Builder(
             builder: (_) {
+              debugPrint('liveRes=${c.livenessResult}');
+              final bool liveOk =
+                  c.livenessResult?['status'] == 'ok' &&
+                      c.livenessResult?['result']?['liveness'] == true;
+
               final bool recoOk = _isRecognitionOk(c.faceRecognitionResult);
-              final bool showRetry = !recoOk;
+
+// ✅ الزر يكون Retry إذا فشل أي واحد من الاثنين
+              final bool showRetry = !(liveOk && recoOk);
 
               final Color bg = showRetry ? Colors.red : Theme.of(context).primaryColor;
               final IconData icon = showRetry ? Icons.refresh_rounded : Icons.arrow_forward_rounded;
