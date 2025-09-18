@@ -18,6 +18,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   double ovalRx = kDefaultOvalRxPct;
   double ovalRy = kDefaultOvalRyPct;
+  int screensaver = 30; // القيمة الابتدائية
 
   @override
   void initState() {
@@ -25,6 +26,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final s = SettingsStore.I.value;
     _countdownCtrl = TextEditingController(text: s.countdownSeconds.toString());
     _screensaverCtrl = TextEditingController(text: s.screensaverSeconds.toString());
+    screensaver = s.screensaverSeconds.clamp(15, 30);
     ovalRx = s.ovalRxPct;
     ovalRy = s.ovalRyPct;
   }
@@ -50,7 +52,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _save() async {
     final cd = int.tryParse(_countdownCtrl.text.trim()) ?? 5;
-    final sv = (int.tryParse(_screensaverCtrl.text.trim()) ?? 30).clamp(15, 30).toInt();
+    // final sv = (int.tryParse(_screensaverCtrl.text.trim()) ?? 30).clamp(15, 30).toInt();
+    final sv = screensaver.clamp(15, 30);
 
     await SettingsStore.I.setCountdownSeconds(cd);
     await SettingsStore.I.setScreensaverSeconds(sv);
@@ -189,30 +192,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
         padding: const EdgeInsets.all(16),
         child: ListView(
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: _numberField(
-                    label: 'Countdown',
-                    controller: _countdownCtrl,
-                    // suffix: 'sec',
-                    hint: 'Default: 5',
-                    decimal: false,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _numberField(
-                    label: 'Screensaver',
-                    controller: _screensaverCtrl,
-                    // suffix: 'sec',
-                    hint: 'Default: 59 (min: 15)',
-                    decimal: false,
-                  ),
-                ),
-              ],
+            Expanded(
+              child: _numberField(
+                label: 'Countdown',
+                controller: _countdownCtrl,
+                hint: 'Default: 5',
+                decimal: false,
+              ),
             ),
 
+            Expanded(
+              child: _adjustableField(
+                label: 'Screensaver',
+                value: screensaver.toDouble(),
+                defaultValue: 30,
+                onIncrement: () {
+                  setState(() {
+                    if (screensaver < 30) screensaver++;
+                  });
+                },
+                onDecrement: () {
+                  setState(() {
+                    if (screensaver > 15) screensaver--;
+                  });
+                },
+              ),
+            ),
             const SizedBox(height: 12),
             _adjustableField(
               label: 'Oval Width (Rx)',

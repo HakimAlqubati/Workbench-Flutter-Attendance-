@@ -23,8 +23,8 @@ const _kKeyFaceRawMax                 = 'settings.face_raw_max';
 const _kKeyCropScale                  = 'settings.crop_scale';
 
 /// -------- القيم الافتراضية --------
-const _kDefaultCountdownSeconds       = 5;
-const _kDefaultScreensaverSeconds     = 59;
+const _kDefaultCountdownSeconds       = 2;
+const _kDefaultScreensaverSeconds     = 30;
 const _kDefaultOvalRxPct              = kDefaultOvalRxPct;
 const _kDefaultOvalRyPct              = kDefaultOvalRyPct;
 const _kDefaultEnableFaceRecognition  = false;

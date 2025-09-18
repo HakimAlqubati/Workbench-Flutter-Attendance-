@@ -44,40 +44,43 @@ class CameraUI extends StatelessWidget {
     return Stack(children: [
     Positioned.fill(
     child: Container(
-    color: () {
-      final live = c.livenessResult;
-      final reco = c.faceRecognitionResult;
-      final attendance = c.attendanceResult;
+      color: () {
+        final live = c.livenessResult;
+        final reco = c.faceRecognitionResult;
+        final attendance = c.attendanceResult;
 
-      final bool? liveOk = (live == null)
-          ? null
-          : (live['status'] == 'ok' &&
-          live['result']?['liveness'] == true);
+        final bool? liveOk = (live == null)
+            ? null
+            : (live['status'] == 'ok' &&
+            live['result']?['liveness'] == true);
 
-      final bool? recoOk = (reco == null)
-          ? null
-          : (reco['match'] is Map &&
-          (reco['match']['found'] == true));
+        final bool? recoOk = (reco == null)
+            ? null
+            : (reco['match'] is Map &&
+            (reco['match']['found'] == true));
 
-      final bool? attOk = (attendance == null)
-          ? null
-          : (attendance['status'] == 'ok');
+        final bool? attOk = (attendance == null)
+            ? null
+            : (attendance['status'] == 'ok');
 
-// 👇 الحالة الافتراضية = أسود (ما في رد)
-      if (liveOk == null || recoOk == null || attOk == null) {
-        return Colors.black.withOpacity(0.5);
-      }
+        // 🟥 شرط خاص: لو liveness false → أحمر مباشرة
+        if (liveOk == false) {
+          return Colors.red.withOpacity(0.5);
+        }
 
-// 👇 إذا الثلاثة ناجحين → أخضر
-      if (liveOk && recoOk && attOk) {
-        return Colors.green.withOpacity(0.5);
-      }
+        // 👇 الحالة الافتراضية = أسود (ما في رد)
+        if (liveOk == null || recoOk == null || attOk == null) {
+          return Colors.black.withOpacity(0.5);
+        }
 
-// 👇 إذا واحد أو أكثر false → أحمر
-      return Colors.red.withOpacity(0.5);
+        // 👇 إذا الثلاثة ناجحين → أخضر
+        if (liveOk && recoOk && attOk) {
+          return Colors.green.withOpacity(0.5);
+        }
 
-
-    }(),
+        // 👇 إذا واحد أو أكثر false → أحمر
+        return Colors.red.withOpacity(0.5);
+      }(),
     ),
     ),
       Positioned.fill(child: basePreview),
