@@ -145,11 +145,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   Text(
                     '$label: ${value.toStringAsFixed(2)}',
-                    style: const TextStyle(color: Colors.white70),
+                    style: const TextStyle(color: Colors.white70,
+                    fontSize: 18),
+
                   ),
                   Text(
                     'Default: ${defaultValue.toStringAsFixed(2)}',
-                    style: const TextStyle(color: Colors.white38, fontSize: 12),
+                    style: const TextStyle(color: Colors.white38, fontSize: 15),
                   ),
                 ],
               ),
@@ -192,32 +194,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
         padding: const EdgeInsets.all(16),
         child: ListView(
           children: [
-            Expanded(
-              child: _numberField(
-                label: 'Countdown',
-                controller: _countdownCtrl,
-                hint: 'Default: 5',
-                decimal: false,
-              ),
+            _adjustableField(
+              label: 'Countdown (sec)',
+              value: int.parse(_countdownCtrl.text).toDouble(),
+              defaultValue: 5,
+              onIncrement: () {
+                setState(() {
+                  final v = int.tryParse(_countdownCtrl.text) ?? 5;
+                  _countdownCtrl.text = (v + 1).toString();
+                });
+              },
+              onDecrement: () {
+                setState(() {
+                  final v = int.tryParse(_countdownCtrl.text) ?? 5;
+                  if (v > 1) _countdownCtrl.text = (v - 1).toString();
+                });
+              },
             ),
 
-            Expanded(
-              child: _adjustableField(
-                label: 'Screensaver',
-                value: screensaver.toDouble(),
-                defaultValue: 30,
-                onIncrement: () {
-                  setState(() {
-                    if (screensaver < 30) screensaver++;
-                  });
-                },
-                onDecrement: () {
-                  setState(() {
-                    if (screensaver > 15) screensaver--;
-                  });
-                },
-              ),
+
+            _adjustableField(
+              label: 'Screensaver',
+              value: screensaver.toDouble(),
+              defaultValue: 30,
+              onIncrement: () {
+                setState(() {
+                  if (screensaver < 30) screensaver++;
+                });
+              },
+              onDecrement: () {
+                setState(() {
+                  if (screensaver > 15) screensaver--;
+                });
+              },
             ),
+
             const SizedBox(height: 12),
             _adjustableField(
               label: 'Oval Width (Rx)',
@@ -226,6 +237,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onIncrement: () => _adjustOvalValue(true, 0.01),
               onDecrement: () => _adjustOvalValue(true, -0.01),
             ),
+
             const SizedBox(height: 12),
             _adjustableField(
               label: 'Oval Height (Ry)',
@@ -234,6 +246,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onIncrement: () => _adjustOvalValue(false, 0.01),
               onDecrement: () => _adjustOvalValue(false, -0.01),
             ),
+
             const SizedBox(height: 16),
             SwitchListTile(
               title: const Text('Enable Face Recognition'),
@@ -245,7 +258,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 if (mounted) setState(() {});
               },
             ),
-
 
             const SizedBox(height: 12),
             ElevatedButton.icon(
@@ -259,10 +271,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
             ),
-
             const SizedBox(height: 12),
           ],
-        ),
+        )
+
       ),
     );
   }

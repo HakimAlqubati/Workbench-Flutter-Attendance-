@@ -59,6 +59,10 @@ class CameraUI extends StatelessWidget {
             : (reco['match'] is Map &&
             (reco['match']['found'] == true));
 
+        if (recoOk == false) {
+          return Colors.red.withOpacity(0.5);
+        }
+
         final bool? attOk = (attendance == null)
             ? null
             : (attendance['status'] == 'ok');
@@ -205,9 +209,11 @@ class CameraUI extends StatelessWidget {
                       c.livenessResult?['result']?['liveness'] == true;
 
               final bool recoOk = _isRecognitionOk(c.faceRecognitionResult);
+              final bool attOk =
+                  c.attendanceResult?['status'] == 'ok';
 
 // ✅ الزر يكون Retry إذا فشل أي واحد من الاثنين
-              final bool showRetry = !(liveOk && recoOk);
+              final bool showRetry = !(liveOk && recoOk && attOk);
 
               final Color bg = showRetry ? Colors.red : Theme.of(context).primaryColor;
               final IconData icon = showRetry ? Icons.refresh_rounded : Icons.arrow_forward_rounded;

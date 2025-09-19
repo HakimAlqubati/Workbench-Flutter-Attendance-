@@ -190,6 +190,15 @@ class SettingsStore {
     await refreshFromServer(silent: true);
   }
 
+  Map<String, dynamic>? safeJsonDecode(String src) {
+    try {
+      return jsonDecode(src) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
+
+
   /// تحديث من السيرفر
   Future<void> refreshFromServer({bool silent = false}) async {
     try {
@@ -201,13 +210,14 @@ class SettingsStore {
       );
 
       if (res.statusCode == 200) {
-        final Map<String, dynamic> data = jsonDecode(res.body);
-        final merged = AppSettings.fromServerJson(
-          data,
-          fallback: value,
-        );
-        notifier.value = merged;
-        await merged.saveToPrefs(_prefs!);
+        final data = safeJsonDecode(res.body);
+        debugPrint('data===>${data}');
+        if (data != null) {
+          final merged = AppSettings.fromServerJson(data, fallback: value);
+          notifier.value = merged;
+          await merged.saveToPrefs(_prefs!);
+        }
+
       } else {
         if (!silent) {
           debugPrint('SettingsStore.refreshFromServer: HTTP ${res.statusCode}');

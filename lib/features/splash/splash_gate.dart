@@ -21,6 +21,7 @@ class _SplashGateState extends State<SplashGate> {
   }
 
   Future<void> _go() async {
+    try {
     final session = await _auth.getSavedSession();
     if (!mounted) return;
 
@@ -29,6 +30,13 @@ class _SplashGateState extends State<SplashGate> {
         MaterialPageRoute(builder: (_) => const HomeScreen()),
       );
     } else {
+      Navigator.of(context).pushReplacementNamed(AppRoutes.login);
+    }
+    } catch (e, st) {
+      debugPrint('SplashGate._go error: $e\n$st');
+      if (!mounted) return;
+
+      // fallback: لو صار أي خطأ نروح لشاشة تسجيل الدخول
       Navigator.of(context).pushReplacementNamed(AppRoutes.login);
     }
   }
