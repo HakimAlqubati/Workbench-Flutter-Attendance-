@@ -14,6 +14,9 @@ const _kKeyEnableFaceRecognition      = 'settings.enable_face_recognition';
 const _kKeyShowSwitchCameraButton     = 'settings.show_switch_camera_button';
 const _kKeySettingsUpdatedAt          = 'settings.updated_at_iso';
 
+const _kKeyShowCameraScreen = 'settings.show_camera_screen';
+const _kKeyShowKeypadScreen = 'settings.show_keypad_screen';
+
 // 🆕 Face thresholds keys
 const _kKeyFaceRawMin                 = 'settings.face_raw_min';
 const _kKeyFaceRawIdeal               = 'settings.face_raw_ideal';
@@ -29,6 +32,9 @@ const _kDefaultOvalRxPct              = kDefaultOvalRxPct;
 const _kDefaultOvalRyPct              = kDefaultOvalRyPct;
 const _kDefaultEnableFaceRecognition  = false;
 const _kDefaultShowSwitchCameraButton = false;
+
+const _kDefaultShowCameraScreen = false;
+const _kDefaultShowKeypadScreen = false;
 
 // 🆕 Face thresholds defaults
 const _kDefaultFaceRawMin             = 0.20;
@@ -57,6 +63,9 @@ class AppSettings {
   final double faceRawIdeal;
   final double faceRawMax;
 
+  final bool showCameraScreen;   // 🆕
+  final bool showKeypadScreen;
+
   const AppSettings({
     required this.countdownSeconds,
     required this.screensaverSeconds,
@@ -68,6 +77,8 @@ class AppSettings {
     required this.faceRawIdeal,
     required this.faceRawMax,
     required this.cropScale,
+    required this.showCameraScreen,
+    required this.showKeypadScreen,
     this.updatedAtIso,
   });
 
@@ -82,6 +93,8 @@ class AppSettings {
     double? faceRawIdeal,
     double? faceRawMax,
     double? cropScale,
+    bool? showCameraScreen,
+    bool? showKeypadScreen,
     String? updatedAtIso,
   }) {
     return AppSettings(
@@ -95,8 +108,20 @@ class AppSettings {
       faceRawIdeal: faceRawIdeal ?? this.faceRawIdeal,
       faceRawMax: faceRawMax ?? this.faceRawMax,
       cropScale: cropScale ?? this.cropScale,
+      showCameraScreen: showCameraScreen ?? this.showCameraScreen,
+      showKeypadScreen: showKeypadScreen ?? this.showKeypadScreen,
       updatedAtIso: updatedAtIso ?? this.updatedAtIso,
     );
+  }
+
+  bool _parseBool(dynamic v, {required bool def}) {
+    if (v is bool) return v;
+    if (v is num) return v != 0;
+    if (v is String) {
+      final s = v.toLowerCase().trim();
+      return s == '1' || s == 'true' || s == 'yes' || s == 'on';
+    }
+    return def;
   }
 
   /// إنشاء من JSON القادم من السيرفر
@@ -115,7 +140,10 @@ class AppSettings {
       faceRawIdeal: (json['faceRawIdeal'] as num?)?.toDouble() ?? fallback.faceRawIdeal,
       faceRawMax: (json['faceRawMax'] as num?)?.toDouble() ?? fallback.faceRawMax,
       cropScale: (json['cropScale'] as num?)?.toDouble() ?? fallback.cropScale,
+
       updatedAtIso: json['updatedAt'] as String? ?? fallback.updatedAtIso,
+
+
     );
   }
 
@@ -132,6 +160,8 @@ class AppSettings {
       faceRawIdeal: prefs.getDouble(_kKeyFaceRawIdeal) ?? _kDefaultFaceRawIdeal,
       faceRawMax: prefs.getDouble(_kKeyFaceRawMax) ?? _kDefaultFaceRawMax,
       cropScale: prefs.getDouble(_kKeyCropScale) ?? _kDefaultCropScale,
+      showCameraScreen: prefs.getBool(_kKeyShowCameraScreen) ?? _kDefaultShowCameraScreen,
+      showKeypadScreen: prefs.getBool(_kKeyShowKeypadScreen) ?? _kDefaultShowKeypadScreen,
       updatedAtIso: prefs.getString(_kKeySettingsUpdatedAt),
     );
   }
@@ -148,6 +178,9 @@ class AppSettings {
     await prefs.setDouble(_kKeyFaceRawIdeal, faceRawIdeal);
     await prefs.setDouble(_kKeyFaceRawMax, faceRawMax);
     await prefs.setDouble(_kKeyCropScale, cropScale);
+    await prefs.setBool(_kKeyShowCameraScreen, showCameraScreen);
+    await prefs.setBool(_kKeyShowKeypadScreen, showKeypadScreen);
+
     if (updatedAtIso != null) {
       await prefs.setString(_kKeySettingsUpdatedAt, updatedAtIso!);
     }
@@ -171,6 +204,8 @@ class SettingsStore {
       faceRawIdeal: _kDefaultFaceRawIdeal,
       faceRawMax: _kDefaultFaceRawMax,
       cropScale: _kDefaultCropScale,
+      showCameraScreen: _kDefaultShowCameraScreen,
+      showKeypadScreen: _kDefaultShowKeypadScreen,
       updatedAtIso: null,
     ),
   );
@@ -291,4 +326,5 @@ class SettingsStore {
     notifier.value = next;
     await next.saveToPrefs(_prefs!);
   }
+
 }

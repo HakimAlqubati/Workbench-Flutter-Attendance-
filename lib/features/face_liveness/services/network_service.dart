@@ -22,6 +22,13 @@ class LivenessNetworkService {
 
 
   Future<Map<String, dynamic>?> sendLiveness(String imagePath) async {
+    // return {
+    //   'status': 'ok',
+    //   'result': {
+    //     'liveness': true,
+    //     'score' : 0.9555,
+    //   },
+    // };
     final uri = Uri.parse('https://workbench.ressystem.com/api/hr/liveness');
     final req = http.MultipartRequest('POST', uri)
       ..files.add(await http.MultipartFile.fromPath('image', imagePath));

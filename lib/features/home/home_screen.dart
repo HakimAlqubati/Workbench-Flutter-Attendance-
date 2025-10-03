@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:my_app/core/navigation/routes.dart';
 import 'package:my_app/core/network_helper.dart';
 import 'package:my_app/core/widgets/app_watermark.dart';
+import 'package:my_app/features/face_liveness/constants.dart';
 import 'package:my_app/features/face_liveness/services/auth_service.dart';
 import 'package:my_app/features/face_liveness/views/face_liveness_screen.dart';
 import 'widgets/big_action_button.dart';
@@ -126,11 +127,13 @@ class HomeScreen extends StatelessWidget {
                     mainAxisSpacing: 12,
                     crossAxisSpacing: 12,
                     children: [
+                      if(kShowCameraScreen)
                       BigActionButton(
                         icon: Icons.camera_alt_outlined,
                         title: 'Start Camera',
                         onPressed: () => _openCamera(context),
                       ),
+                      if(kShowKeypadScreen)
                       BigActionButton(
                         icon: Icons.dialpad_rounded,
                         title: 'Attendance Keypad',
