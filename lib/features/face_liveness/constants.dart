@@ -97,7 +97,7 @@ bool get kEnableFaceRecognition {
   try {
     return SettingsStore.I.value.enableFaceRecognition;
   } catch (_) {
-    return false; // fallback
+    return true; // fallback
   }
 }
 

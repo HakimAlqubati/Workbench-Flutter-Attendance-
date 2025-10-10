@@ -25,6 +25,9 @@ import '../services/network_service.dart';
 
 
 class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver {
+
+  Future<String?> Function()? onRequireType;
+
   // ===== Dependencies / Services =====
   final LivenessNetworkService _net = LivenessNetworkService();
   int _warmUpFrames = 0;
@@ -297,11 +300,11 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
 
     // ✅ عيّن الأمامية والخلفية مع orElse غير قابل لـ null
     _frontCamera = _allCams.firstWhere(
-          (c) => c.lensDirection == CameraLensDirection.back,
+          (c) => c.lensDirection == CameraLensDirection.front,
       orElse: () => _allCams.first, // non-null
     );
     _rearCamera = _allCams.firstWhere(
-          (c) => c.lensDirection == CameraLensDirection.back,
+          (c) => c.lensDirection == CameraLensDirection.front,
       orElse: () => _allCams.first, // non-null
     );
 
@@ -342,7 +345,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
   // Future<void> _initCamera() async {
   //   final cameras = await availableCameras();
   //   _frontCamera = cameras.firstWhere(
-  //         (c) => c.lensDirection == CameraLensDirection.back,
+  //         (c) => c.lensDirection == CameraLensDirection.front,
   //     orElse: () => cameras.first,
   //   );
   //   _controller = CameraController(
@@ -547,7 +550,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
         final rawH = image.height.toDouble();
 
         final bool isFront =
-            _frontCamera?.lensDirection == CameraLensDirection.back;
+            _frontCamera?.lensDirection == CameraLensDirection.front;
 
         // داخل/مركز البيضاوي
         _insideOval = _isFaceInsideOvalOnScreen(
@@ -602,7 +605,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
             sizeRaw >= _sizeCfg.rawMin &&
             sizeRaw <= _sizeCfg.rawMax
 
-            // && goodLighting
+            && goodLighting
         ;
 
         _setCaptureEligible(eligible);
@@ -1326,6 +1329,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     }
 
     final nowStr = formatDateTime(DateTime.now());
+    // final nowStr = formatDateTime(DateTime.parse("2025-10-11 07:30:00"));
 
     try {
       ApiResult result;
@@ -1339,6 +1343,30 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
         dateTime: nowStr,
       );
 
+
+      // ✅ لو السيرفر طلب type → اسأل الواجهة ثم أعد الإرسال
+      if (result.needType == true) {
+        final String? picked = await (onRequireType?.call());
+        if (picked != null) {
+          // إعادة الإرسال مع type الذي اختاره المستخدم
+          result = await AttendanceService.storeByEmployeeId(
+            employeeId: employeeId,
+            dateTime: nowStr,
+            type: picked, // ✅
+          );
+        } else {
+          // المستخدم أغلق المودال بدون اختيار
+          _attendanceResult = {
+            'status': 'error',
+            'message': 'Type not selected',
+          };
+          _postedAttendanceForThisCapture = true;
+          _lastApiOk = false;
+          _lastApiMessage = 'Type not selected';
+          notifyListeners();
+          return;
+        }
+      }
 
       debugPrint('resultAttendance${result.ok}__${result.message}');
       _postedAttendanceForThisCapture = true;

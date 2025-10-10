@@ -7,10 +7,30 @@ import 'package:my_app/features/face_liveness/services/auth_service.dart';
 class ApiResult {
   final bool ok;
   final String message;
-  ApiResult({required this.ok, required this.message});
+  final bool needType; // ✅ جديد
+  ApiResult({
+    required this.ok,
+    required this.message,
+    this.needType = false,
+  });
+}
+
+
+bool _needsType(http.Response res) {
+  if (res.statusCode == 422) return true;
+  try {
+    final json = jsonDecode(res.body);
+    final msg = (json['message'] ?? '').toString().toLowerCase();
+    return msg.contains('please specify type');
+  } catch (_) {
+    return false;
+  }
 }
 
 class AttendanceService {
+
+  Future<String?> Function()? onRequireType;
+
   static Future<ApiResult> storeByRfid({
     required String rfid,
     required String dateTime, // "YYYY-MM-DD HH:mm:ss"
@@ -26,10 +46,13 @@ class AttendanceService {
     required int employeeId,
     required String dateTime, // "YYYY-MM-DD HH:mm:ss"
     Map<String, String>? headers,
+    String? type,
   }) async {
     return _postAttendance(body: {
       "employee_id": employeeId,
       "date_time": dateTime,
+      if (type != null) 'type': type,
+
     }, headers: headers);
   }
 
@@ -74,6 +97,12 @@ class AttendanceService {
         }
       } catch (_) {}
       return body;
+    }
+
+    // ✅ لو السيرفر يطلب type: رجّع needType=true
+    if (_needsType(res)) {
+      final msg = extractMsg(raw).isNotEmpty ? extractMsg(raw) : "please specify type";
+      return ApiResult(ok: false, message: msg, needType: true);
     }
 
     if (res.statusCode >= 200 && res.statusCode < 300) {

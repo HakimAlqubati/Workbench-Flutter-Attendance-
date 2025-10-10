@@ -127,13 +127,13 @@ class HomeScreen extends StatelessWidget {
                     mainAxisSpacing: 12,
                     crossAxisSpacing: 12,
                     children: [
-                      if(kShowCameraScreen)
+                      // if(kShowCameraScreen)
                       BigActionButton(
                         icon: Icons.camera_alt_outlined,
                         title: 'Start Camera',
                         onPressed: () => _openCamera(context),
                       ),
-                      if(kShowKeypadScreen)
+                      // if(kShowKeypadScreen)
                       BigActionButton(
                         icon: Icons.dialpad_rounded,
                         title: 'Attendance Keypad',

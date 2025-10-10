@@ -13,6 +13,59 @@ import 'package:my_app/features/face_liveness/widgets/gclass.dart';
 import 'package:my_app/features/face_liveness/widgets/oval_clipper.dart';
 import 'package:my_app/features/face_liveness/constants.dart';
 
+Future<String?> _askTypeModal(BuildContext context) async {
+  String selected = 'checkin'; // افتراضي
+
+  return await showDialog<String>(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) {
+      return StatefulBuilder(
+        builder: (ctx, setState) {
+          return AlertDialog(
+            title: const Text('Specify Type'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                RadioListTile<String>(
+                  title: const Text('Check-in'),
+                  value: 'checkin',
+                  groupValue: selected,
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() => selected = v); // ✅ مهم
+                  },
+                ),
+                RadioListTile<String>(
+                  title: const Text('Check-out'),
+                  value: 'checkout',
+                  groupValue: selected,
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() => selected = v); // ✅ مهم
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(null),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(ctx).pop(selected),
+                child: const Text('Submit'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
+
+
+
 class CameraUI extends StatelessWidget {
   final FaceLivenessController c;
   final AnimationController glowCtrl;
@@ -40,6 +93,8 @@ class CameraUI extends StatelessWidget {
     // لون إطار البيضاوي بحسب الأهلية
     final Color ovalActiveColor =
     c.captureEligible ? const Color(0xff0fd86e) : const Color(0xffffb74d);
+
+    c.onRequireType ??= () => _askTypeModal(context);
 
     return Stack(children: [
     Positioned.fill(
@@ -243,9 +298,9 @@ class CameraUI extends StatelessWidget {
   // == helpers ==
   String _guidanceText(FaceLivenessController c) {
     final status = c.brightnessStatus ?? '';
-    if (status.contains('❌') && (status.contains('dark') || status.contains('dim'))) {
-      return "Find better lighting";
-    }
+    // if (status.contains('❌') && (status.contains('dark') || status.contains('dim'))) {
+    //   return "Find better lighting";
+    // }
     if (status.contains('⚠️') && status.contains('bright')) {
       return "Avoid direct light";
     }
