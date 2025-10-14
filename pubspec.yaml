@@ -48,6 +48,8 @@ dependencies:
   connectivity_plus: ^6.1.5
   fluttertoast: ^8.2.6
   image: ^4.2.0
+  platform_device_id_plus: ^1.0.7
+  package_info_plus: ^8.3.0
 
 flutter_icons:
   android: true

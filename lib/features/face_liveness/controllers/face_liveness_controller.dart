@@ -26,6 +26,16 @@ import '../services/network_service.dart';
 
 class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver {
 
+  final ValueNotifier<String?> bannerMessage = ValueNotifier<String?>(null);
+
+  void showBanner(String msg) {
+    bannerMessage.value = msg;
+  }
+
+  void clearBanner() {
+    bannerMessage.value = null;
+  }
+
   Future<String?> Function()? onRequireType;
 
   // ===== Dependencies / Services =====
@@ -1344,30 +1354,49 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
       );
 
 
-      // ✅ لو السيرفر طلب type → اسأل الواجهة ثم أعد الإرسال
+// خزّن رسالة الرد الأولى (قد تحتوي "please specify type")
+      final String firstMessage = (result.message ?? '').toString().trim();
+
+// ✅ لو السيرفر طلب type → افتح المودال
       if (result.needType == true) {
         final String? picked = await (onRequireType?.call());
+
         if (picked != null) {
-          // إعادة الإرسال مع type الذي اختاره المستخدم
+          // إعادة الإرسال مع النوع المختار
           result = await AttendanceService.storeByEmployeeId(
             employeeId: employeeId,
             dateTime: nowStr,
-            type: picked, // ✅
+            type: picked,
           );
         } else {
-          // المستخدم أغلق المودال بدون اختيار
+          // المستخدم أغلق المودال → اطبع رسالة السيرفر كما هي (أو بديل)
           _attendanceResult = {
             'status': 'error',
-            'message': 'Type not selected',
+            'message': firstMessage.isNotEmpty ? firstMessage : 'Type not selected',
           };
           _postedAttendanceForThisCapture = true;
           _lastApiOk = false;
-          _lastApiMessage = 'Type not selected';
+          _lastApiMessage = _attendanceResult!['message'];
           notifyListeners();
           return;
         }
       }
 
+// من هنا: عندنا نتيجة نهائية (نجاح/فشل) من أحد الطلبين
+      debugPrint('resultAttendance ${result.ok}__${result.message}');
+      _postedAttendanceForThisCapture = true;
+
+      _lastApiOk = result.ok;
+      _lastApiMessage = result.message;
+
+// أعرض رسالة السيرفر كما هي
+      _attendanceResult = {
+        'status': result.ok ? 'ok' : 'error',
+        'message': result.message,
+      };
+
+      debugPrint('[ATT][RESPONSE] ok=${result.ok}, msg=${result.message}');
+      notifyListeners();
       debugPrint('resultAttendance${result.ok}__${result.message}');
       _postedAttendanceForThisCapture = true;
 

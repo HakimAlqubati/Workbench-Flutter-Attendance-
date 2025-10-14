@@ -30,7 +30,7 @@ const _kDefaultCountdownSeconds       = 2;
 const _kDefaultScreensaverSeconds     = 30;
 const _kDefaultOvalRxPct              = kDefaultOvalRxPct;
 const _kDefaultOvalRyPct              = kDefaultOvalRyPct;
-const _kDefaultEnableFaceRecognition  = false;
+const _kDefaultEnableFaceRecognition  = true;
 const _kDefaultShowSwitchCameraButton = false;
 
 const _kDefaultShowCameraScreen = false;

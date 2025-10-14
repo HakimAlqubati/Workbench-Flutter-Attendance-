@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:my_app/core/toast_utils.dart';
 import 'package:my_app/features/face_liveness/controllers/face_liveness_controller.dart';
 import 'package:my_app/features/face_liveness/painters/frame_glow_painter.dart';
 import 'package:my_app/features/face_liveness/painters/frame_mask_painter.dart';
@@ -94,7 +95,7 @@ class CameraUI extends StatelessWidget {
     final Color ovalActiveColor =
     c.captureEligible ? const Color(0xff0fd86e) : const Color(0xffffb74d);
 
-    c.onRequireType ??= () => _askTypeModal(context);
+    // c.onRequireType ??= () => _askTypeModal(context);
 
     return Stack(children: [
     Positioned.fill(
@@ -124,9 +125,18 @@ class CameraUI extends StatelessWidget {
 
         // 🟥 شرط خاص: لو liveness false → أحمر مباشرة
         if (liveOk == false) {
+          // showCustomToast(
+          //   message: 'Check Light',
+          //   backgroundColor: Colors.redAccent,
+          //   textColor: Colors.white,
+          // );
+
+          c.showBanner('Adjust The Lighting And Try Again');
+
           return Colors.red.withOpacity(0.5);
         }
 
+        c.clearBanner();
         // 👇 الحالة الافتراضية = أسود (ما في رد)
         if (liveOk == null || recoOk == null || attOk == null) {
           return Colors.black.withOpacity(0.5);
@@ -274,19 +284,55 @@ class CameraUI extends StatelessWidget {
               final IconData icon = showRetry ? Icons.refresh_rounded : Icons.arrow_forward_rounded;
               final String label = showRetry ? 'Retry' : 'Next Employee';
 
-              return ElevatedButton.icon(
-                icon: Icon(icon),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: bg,
-                  foregroundColor: Colors.white,
-                  shadowColor: Colors.black54,
-                  elevation: 8,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-                  textStyle: const TextStyle(fontWeight: FontWeight.w800),
-                ),
-                onPressed: () async => c.tapNextEmployee(),
-                label: Text(label),
+
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ValueListenableBuilder<String?>(
+                    valueListenable: c.bannerMessage,
+                    builder: (context, msg, _) {
+                      if (msg == null || msg.isEmpty) return const SizedBox.shrink();
+
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16.0),
+                        child: SizedBox(
+                          width: MediaQuery.of(context).size.width * 0.85, // عريض بنسبة 85%
+                          child: Text(
+                            msg,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.amberAccent,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 18,
+                              decoration: TextDecoration.none,
+                              shadows: [
+                                Shadow(color: Colors.black54, blurRadius: 8, offset: Offset(0, 3)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  ElevatedButton.icon(
+                    icon: Icon(icon),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: bg,
+                      foregroundColor: Colors.white,
+                      shadowColor: Colors.black54,
+                      elevation: 8,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                      textStyle: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    onPressed: () async {
+                      c.clearBanner();
+                      await c.tapNextEmployee();
+                    },
+
+                    label: Text(label),
+                  ),
+                ],
               );
             },
           ),

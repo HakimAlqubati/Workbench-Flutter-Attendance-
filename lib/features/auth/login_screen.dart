@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:my_app/core/network_helper.dart';
+import 'package:my_app/core/toast_utils.dart';
 import 'package:my_app/features/face_liveness/services/auth_service.dart';
 import 'dart:ui';
+
+import 'package:platform_device_id_plus/platform_device_id.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -9,6 +12,7 @@ class LoginScreen extends StatefulWidget {
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
+
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
@@ -21,15 +25,62 @@ class _LoginScreenState extends State<LoginScreen> {
   final _auth = AuthService();
 
   @override
-  void initState() {
+  void initState()   {
     super.initState();
 
+     _getDeviceId();
     // فقط أثناء التطوير، املأ الحقول افتراضيًا
     assert(() {
       _emailCtrl.text = 'admin@admin.com';
       _passCtrl.text = '123456';
       return true;
     }());
+  }
+
+  Future<String?> getDeviceUniqueId() async {
+    String? deviceId;
+    try {
+      deviceId = await PlatformDeviceId.deviceInfoPlugin.androidInfo
+          .then<String?>((androidInfo) {
+        if (androidInfo.version.sdkInt <= 30) {
+
+          debugPrint('androidInfo.serialNumber_${androidInfo.serialNumber}');
+          debugPrint('cn1_${deviceId}');
+
+          return androidInfo.serialNumber.replaceAll('.', '');
+        } else {
+          debugPrint('cn2_${deviceId}');
+
+          final id =  PlatformDeviceId.getDeviceId;
+
+          debugPrint('cn3_${id}');
+
+          return id;
+        }
+
+      }).catchError((error) {
+
+        showCustomToast(message: "Error getting Android device ID: $error",backgroundColor: AppColors.primaryColor,
+        );
+        return null;
+      });
+      return deviceId;
+    } catch (e, stackTrace) {
+
+
+      return null;
+    }
+  }
+
+  String? deviceId;
+    _getDeviceId() async {
+    deviceId = await getDeviceUniqueId();
+
+    debugPrint('DEVICEID${deviceId.toString()}');
+    showCustomToast(message: deviceId!);
+    setState(() {
+
+    });
   }
 
   Future<void> _submit() async {
@@ -231,7 +282,31 @@ class _LoginScreenState extends State<LoginScreen> {
                                 fontSize: 12,
                                 letterSpacing: .2,
                               ),
+
                             ),
+                            IconButton(
+                              tooltip: 'Reload Device ID',
+                              icon: const Icon(Icons.refresh, size: 18, color: Colors.white70),
+                              onPressed: (){
+                                setState(() {
+
+                                  getDeviceUniqueId();
+                                });
+                              }, // ← ينادي الدالة
+                            ),
+                            // if (deviceId != null) ...[
+                            //   const SizedBox(height: 8),
+                            //   Text(
+                            //     'Device ID: $_getDeviceId',
+                            //     textAlign: TextAlign.center,
+                            //     style: const TextStyle(
+                            //       color: Colors.white70,
+                            //       fontSize: 12,
+                            //       letterSpacing: .3,
+                            //     ),
+                            //   ),
+                            // ],
+
                           ],
                         ),
                       ),

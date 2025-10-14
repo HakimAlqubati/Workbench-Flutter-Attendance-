@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:my_app/core/navigation/routes.dart';
 import 'package:my_app/core/network_helper.dart';
+import 'package:my_app/core/toast_utils.dart';
 import 'package:my_app/core/widgets/app_watermark.dart';
 import 'package:my_app/features/face_liveness/constants.dart';
 import 'package:my_app/features/face_liveness/services/auth_service.dart';
 import 'package:my_app/features/face_liveness/views/face_liveness_screen.dart';
+import 'package:platform_device_id_plus/platform_device_id.dart';
 import 'widgets/big_action_button.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -77,6 +80,7 @@ class HomeScreen extends StatelessWidget {
         title: const Text("Face Liveness"),
         centerTitle: true,
         actions: [
+
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () => _openSettings(context),

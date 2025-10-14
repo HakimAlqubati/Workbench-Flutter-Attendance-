@@ -13,6 +13,25 @@ class ApiResult {
     required this.message,
     this.needType = false,
   });
+
+  // factory ApiResult.fromJson(Map<String, dynamic> j) {
+  //   final ok = (j['status'] == true) || (j['success'] == true);
+  //
+  //   // نحافظ على الرسالة الأصلية للعرض
+  //   final messageOriginal = (j['message'] ?? '').toString().trim();
+  //
+  //   // نستخدم نسخة lower فقط للفحص عن needType
+  //   final msgLower = messageOriginal.toLowerCase();
+  //
+  //   final needType = msgLower.contains('please specify type');
+  //
+  //   return ApiResult(
+  //     ok: ok,
+  //     needType: needType,
+  //     message: messageOriginal, // نعرض الأصلية
+  //   );
+  // }
+
 }
 
 
