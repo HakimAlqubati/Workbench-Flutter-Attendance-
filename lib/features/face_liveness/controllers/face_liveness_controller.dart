@@ -2,31 +2,64 @@
 // File: lib/features/face_liveness/controller/face_liveness_controller.dart
 // =============================
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
-
+import 'package:image/image.dart' as img;
+import 'package:gallery_saver_plus/gallery_saver.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
+import 'package:my_app/core/network_helper.dart';
+import 'package:my_app/features/attendance/attendance_service.dart';
+
+// 1) التقط الصورة واعرضها فورًا
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as path;
 
 import '../constants.dart';
 import '../services/network_service.dart';
 
+
 class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver {
+
+  final ValueNotifier<String?> bannerMessage = ValueNotifier<String?>(null);
+
+  void showBanner(String msg) {
+    bannerMessage.value = msg;
+  }
+
+  void clearBanner() {
+    bannerMessage.value = null;
+  }
+
+  Future<String?> Function()? onRequireType;
+
   // ===== Dependencies / Services =====
   final LivenessNetworkService _net = LivenessNetworkService();
   int _warmUpFrames = 0;
 
+  VoidCallback? onLivenessFailed;
+
   DateTime? _lastBlendTs;
+
+  Map<String, dynamic>? _attendanceResult;
+  Map<String, dynamic>? get attendanceResult => _attendanceResult;
+
 
   // ===== Camera =====
   CameraController? _controller;
   CameraController? get controller => _controller;
   CameraDescription? _frontCamera;
+  List<CameraDescription> _allCams = const [];
 
+
+  bool _useFront = true; // ✅ الحالة الحالية: true = أمامية
+  bool get isFrontCamera => _useFront;
+  CameraDescription? _rearCamera;
   // ===== Detector =====
   FaceDetector? _detector;
   bool _isDetecting = false;
@@ -127,7 +160,6 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
   bool get recognitionPending =>
       kEnableFaceRecognition && _waiting && (_faceRecognitionResult == null);
 
-
   // Clock
   final List<String> _clockPositions = ['center', 'right', 'left'];
   int _clockPosIndex = 0;
@@ -188,6 +220,15 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
   bool get tooClose => _sizeRaw != null && _sizeRaw! > _sizeCfg.rawMax;
 
   double get fitPct => (_ratioProgress.clamp(0.0, 1.0)) * 100.0;
+
+  // ===== حقل للحضور الآلي لمنع التكرار لكل لقطة =====
+  bool _postedAttendanceForThisCapture = false;
+
+  // اختيارية: لعرض رسالة آخر استدعاء API في الواجهة
+  String? _lastApiMessage;
+  String? get lastApiMessage => _lastApiMessage;
+  bool _lastApiOk = false;
+  bool get lastApiOk => _lastApiOk;
 
   // ===== Lifecycle =====
   Future<void> init() async {
@@ -256,14 +297,34 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     );
   }
 
+
   Future<void> _initCamera() async {
-    final cameras = await availableCameras();
-    _frontCamera = cameras.firstWhere(
+    // ✅ اجلب الكاميرات مرة واحدة
+    _allCams = await availableCameras();
+
+    // ✅ حارس: لا توجد كاميرات
+    if (_allCams.isEmpty) {
+      debugPrint('❌ No cameras available');
+      return;
+    }
+
+    // ✅ عيّن الأمامية والخلفية مع orElse غير قابل لـ null
+    _frontCamera = _allCams.firstWhere(
           (c) => c.lensDirection == CameraLensDirection.front,
-      orElse: () => cameras.first,
+      orElse: () => _allCams.first, // non-null
     );
+    _rearCamera = _allCams.firstWhere(
+          (c) => c.lensDirection == CameraLensDirection.front,
+      orElse: () => _allCams.first, // non-null
+    );
+
+    // ✅ اختر الكاميرا الدافعة حسب العلم الحالي مع fallback منطقي
+    final CameraDescription camToUse =
+    _useFront ? (_frontCamera ?? _rearCamera!) : (_rearCamera ?? _frontCamera!);
+
+    // ✅ أنشئ الكونترولر مرة واحدة فقط باستخدام الكاميرا المختارة
     _controller = CameraController(
-      _frontCamera!,
+      camToUse,
       ResolutionPreset.medium,
       enableAudio: false,
       imageFormatGroup: ImageFormatGroup.nv21,
@@ -271,11 +332,13 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     await _controller!.initialize();
     await _controller!.lockCaptureOrientation(DeviceOrientation.portraitUp);
 
+    // ✅ خزّن حجم الإطار الأخير
     _latestImageSize = Size(
       _controller!.value.previewSize?.width ?? 1280,
       _controller!.value.previewSize?.height ?? 720,
     );
 
+    // ✅ مراقبة أخطاء المعاينة
     _controller!.addListener(() async {
       final v = _controller!.value;
       if (v.hasError) {
@@ -287,6 +350,39 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     await _startStreamSafely();
     notifyListeners();
   }
+
+
+  // Future<void> _initCamera() async {
+  //   final cameras = await availableCameras();
+  //   _frontCamera = cameras.firstWhere(
+  //         (c) => c.lensDirection == CameraLensDirection.front,
+  //     orElse: () => cameras.first,
+  //   );
+  //   _controller = CameraController(
+  //     _frontCamera!,
+  //     ResolutionPreset.medium,
+  //     enableAudio: false,
+  //     imageFormatGroup: ImageFormatGroup.nv21,
+  //   );
+  //   await _controller!.initialize();
+  //   await _controller!.lockCaptureOrientation(DeviceOrientation.portraitUp);
+  //
+  //   _latestImageSize = Size(
+  //     _controller!.value.previewSize?.width ?? 1280,
+  //     _controller!.value.previewSize?.height ?? 720,
+  //   );
+  //
+  //   _controller!.addListener(() async {
+  //     final v = _controller!.value;
+  //     if (v.hasError) {
+  //       await _stopStreamSafely();
+  //       await _startStreamSafely();
+  //     }
+  //   });
+  //
+  //   await _startStreamSafely();
+  //   notifyListeners();
+  // }
 
   Future<void> _disposeCamera() async {
     try {
@@ -335,6 +431,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     _capturedFile = null;
     _livenessResult = null;
     _faceRecognitionResult = null;
+    _attendanceResult = null;
     _stopCountdown(force: true);
     _isSnapshotting = false;
     _isDetecting = false;
@@ -388,6 +485,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     _capturedFile = null;
     _livenessResult = null;
     _faceRecognitionResult = null;
+    _attendanceResult = null;
     _cameraOpen = true;
     _isSnapshotting = false;
     _readyForNextImage = true;
@@ -395,7 +493,6 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     _ratioProgress = 0.0;
 
     _warmUpFrames = 12; // ⬅️ تجاهل أول 12 إطار بعد الرجوع
-
 
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 120));
@@ -452,7 +549,9 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
         // اختر أكبر وجه
         final face = faces.reduce((a, b) =>
         (a.boundingBox.width * a.boundingBox.height) >
-            (b.boundingBox.width * b.boundingBox.height) ? a : b);
+            (b.boundingBox.width * b.boundingBox.height)
+            ? a
+            : b);
 
         final rect = face.boundingBox;
         _lastFaceRect = rect;
@@ -496,7 +595,8 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
         if (!inFrame || posFactor == 0.0) {
           _setRatioProgress = 0.0;
         } else {
-          final double targetProgress = (sizeFactor * posFactor).clamp(0.0, 1.0);
+          final double targetProgress =
+          (sizeFactor * posFactor).clamp(0.0, 1.0);
           _blendProgress(targetProgress, smooth: 0.22);
         }
 
@@ -506,11 +606,17 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
         debugPrint('Hakim{$sizeRaw}');
         debugPrint('rawMin: ${_sizeCfg.rawMin.toStringAsFixed(3)}');
         debugPrint('rawMax: ${_sizeCfg.rawMax.toStringAsFixed(3)}');
+        final bool goodLighting = _brightnessStatus == 'Good lighting ✅' ||
+            _brightnessStatus == 'Excellent lighting 🌟';
+
         // ✅ الأهلية تعتمد على (تمركز المركز + حجم ضمن النطاق)
-        final bool eligible = _faceDetected
-            && _insideOval
-            && sizeRaw >= _sizeCfg.rawMin
-            && sizeRaw <= _sizeCfg.rawMax;
+        final bool eligible = _faceDetected &&
+            _insideOval &&
+            sizeRaw >= _sizeCfg.rawMin &&
+            sizeRaw <= _sizeCfg.rawMax
+
+            && goodLighting
+        ;
 
         _setCaptureEligible(eligible);
 
@@ -546,9 +652,9 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     }
 
     final srcW = imageRawSize.height; // portrait width
-    final srcH = imageRawSize.width;  // portrait height
+    final srcH = imageRawSize.width; // portrait height
     final scale = math.max(screenSize.width / srcW, screenSize.height / srcH);
-    final dxPad = (screenSize.width  - srcW * scale) / 2.0;
+    final dxPad = (screenSize.width - srcW * scale) / 2.0;
     final dyPad = (screenSize.height - srcH * scale) / 2.0;
 
     double cx = faceCenter.dx * scale + dxPad;
@@ -559,9 +665,9 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
       cx = 2 * midX - cx;
     }
 
-    final ovalCx = screenSize.width  * (0.5 + kOvalCxOffsetPct);
+    final ovalCx = screenSize.width * (0.5 + kOvalCxOffsetPct);
     final ovalCy = screenSize.height * (0.5 + kOvalCyOffsetPct);
-    final ovalRx = (screenSize.width  * kOvalRxPct);
+    final ovalRx = (screenSize.width * kOvalRxPct);
     final ovalRy = (screenSize.height * kOvalRyPct);
 
     final offXpx = cx - ovalCx;
@@ -580,8 +686,9 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
 
   // سماحية: 15% خارج الحد مقبولة، أو 3 زوايا من 4 داخل
   static const double _kEdgeOverflowTol = 0.22; // 15% خارج الحد
-  static const double _kCornersNeeded = 4;      // 3 زوايا كفاية
+  static const double _kCornersNeeded = 4; // 3 زوايا كفاية
 
+  // استبدل دالة _isFaceInsideOvalOnScreen بالكامل بهذه (إزالة return المكرر غير القابل للوصول)
   bool _isFaceInsideOvalOnScreen({
     required Offset faceCenter,
     required Size imageRawSize,
@@ -621,16 +728,13 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
         cx = 2 * midX - cx;
       }
 
-      // مسافة مُطبَّعة لنقطة بالنسبة للبيضاوي
       final dxn = (cx - ovalCx) / ovalRx;
       final dyn = (cy - ovalCy) / ovalRy;
       final distance = dxn * dxn + dyn * dyn; // <= 1 داخل
-
-      // اسمح بزيادة 15% خارج الحد
       if (distance <= (1.0 + _kEdgeOverflowTol)) insideCount++;
     }
 
-    // أيضًا لو المركز داخل البيضاوي بزيادة سماحية نصفية
+    // تحقُّق إضافي: مركز الوجه داخل البيضاوي مع سماحية نصفية
     final faceCxRaw = faceRect.center;
     double ccx = faceCxRaw.dx * scale + dx;
     double ccy = faceCxRaw.dy * scale + dy;
@@ -640,11 +744,10 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     }
     final cdxn = (ccx - ovalCx) / ovalRx;
     final cdyn = (ccy - ovalCy) / ovalRy;
-    final centerInside = (cdxn * cdxn + cdyn * cdyn) <= (1.0 + _kEdgeOverflowTol * 0.5);
+    final centerInside =
+        (cdxn * cdxn + cdyn * cdyn) <= (1.0 + _kEdgeOverflowTol * 0.5);
 
-    return insideCount >= _kCornersNeeded && centerInside; // كل الزوايا + المركز داخل
-
-    return insideCount >= _kCornersNeeded || centerInside;
+    return insideCount >= _kCornersNeeded && centerInside;
   }
 
   void _updateFaceDetected(bool detected) {
@@ -656,6 +759,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
       if (!_isSnapshotting) {
         _livenessResult = null;
         _faceRecognitionResult = null;
+        _attendanceResult = null;
         _capturedFile = null;
       }
       _resetInactivity();
@@ -669,9 +773,19 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
 
     userActivity();
     Timer.periodic(const Duration(seconds: 1), (Timer t) async {
-      if (_showScreensaver) { t.cancel(); return; }
-      if (!_captureEligible) { _stopCountdown(); t.cancel(); return; }
-      if (_isSnapshotting) { t.cancel(); return; }
+      if (_showScreensaver) {
+        t.cancel();
+        return;
+      }
+      if (!_captureEligible) {
+        _stopCountdown();
+        t.cancel();
+        return;
+      }
+      if (_isSnapshotting) {
+        t.cancel();
+        return;
+      }
 
       if (_countdown != null && _countdown! > 0) {
         _countdown = _countdown! - 1;
@@ -681,12 +795,57 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
           _isSnapshotting = true;
           notifyListeners();
           t.cancel();
-          scheduleMicrotask(() async { await _handleLivenessCheck(); });
+          scheduleMicrotask(() async {
+            await _handleLivenessCheck();
+          });
         }
       }
     });
     notifyListeners();
   }
+  /// قص صورة داخل بيضاوي (Oval) حسب أبعاد الشاشة
+  Future<File> cropToOval(File originalFile, Size screenSize, {double scale = 1.0}) async {
+    final bytes = await originalFile.readAsBytes();
+    final src = img.decodeImage(bytes)!;
+
+    // أبعاد البيضاوي بالنسبة للصورة نفسها
+    final ovalCx = src.width * (0.5 + kOvalCxOffsetPct);
+    final ovalCy = src.height * (0.5 + kOvalCyOffsetPct);
+    final ovalRx = src.width * kOvalRxPct;
+    final ovalRy = src.height * kOvalRyPct;
+
+    // المستطيل المحيط بالبيضاوي
+    final left   = (ovalCx - ovalRx).clamp(0, src.width - 1).toInt();
+    final top    = (ovalCy - ovalRy).clamp(0, src.height - 1).toInt();
+    final right  = (ovalCx + ovalRx).clamp(0, src.width - 1).toInt();
+    final bottom = (ovalCy + ovalRy).clamp(0, src.height - 1).toInt();
+
+    // ✅ اجعلها مربعة
+    int side = math.min(right - left, bottom - top);
+
+    // ✅ طبّق التكبير/التصغير
+    side = (side * scale).toInt().clamp(10, math.min(src.width, src.height));
+
+    // ✅ قص مربع متمركز
+    final squareLeft = (ovalCx - side / 2).clamp(0, src.width - side).toInt();
+    final squareTop  = (ovalCy - side / 2).clamp(0, src.height - side).toInt();
+
+    final croppedSquare = img.copyCrop(
+      src,
+      x: squareLeft,
+      y: squareTop,
+      width: side,
+      height: side,
+    );
+
+    // حفظ الصورة
+    final croppedPath = originalFile.path.replaceFirst('.jpg', '_square.jpg');
+    final croppedFile = File(croppedPath)
+      ..writeAsBytesSync(img.encodeJpg(croppedSquare, quality: 95));
+
+    return croppedFile;
+  }
+
 
   void _stopCountdown({bool force = false}) {
     if (_isSnapshotting && !force) return;
@@ -710,6 +869,8 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     final int seq = ++_captureSeq;
     _activeCaptureSeq = seq;
 
+    _postedAttendanceForThisCapture = false;
+
     try {
       _readyForNextImage = false;
       _isDetecting = false;
@@ -724,28 +885,57 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
         return;
       }
 
-      // 1) التقط الصورة واعرضها فورًا
-      final file = await _controller!.takePicture();
-      _capturedFile = file;
+      // 1️⃣ التقط الصورة
+      final XFile captured = await _controller!.takePicture();
+
+      // 2️⃣ انسخ الصورة للمجلد الخاص بالتطبيق
+      final Directory dir = await getApplicationDocumentsDirectory();
+      final Directory folder = Directory(path.join(dir.path, 'liveness_captures'));
+      if (!await folder.exists()) {
+        await folder.create(recursive: true);
+      }
+      final String filename = 'capture_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final String savedPath = path.join(folder.path, filename);
+      final File savedFile = await File(captured.path).copy(savedPath);
+
+      // ✂️ قص الصورة بالبيضاوي
+      final File ovalFile = await cropToOval(savedFile, _screenSize,scale: kCropScale);
+
+      // 3️⃣ حفظ الصورة المقصوصة في المعرض (اختياري)
+      // await GallerySaver.saveImage(ovalFile.path, albumName: 'LivenessCaptures');
+
+      // ✅ اعتمد الصورة المقصوصة فقط
+      _capturedFile = XFile(ovalFile.path);
+
+      // (اختياري) احتفظ بنسخة في مجلد التطبيق
+      final String ovalSavedPath = path.join(folder.path, 'oval_${DateTime.now().millisecondsSinceEpoch}.jpg');
+      await File(ovalFile.path).copy(ovalSavedPath);
+
+      // إعادة ضبط الحالة
       _lastFaceRect = null;
       _livenessResult = null;
       _faceRecognitionResult = null;
-
-      // ✅ أعِد تشغيل عدّاد الـ screensaver الآن (من الصفر)
+      _attendanceResult = null;
       _resetInactivity();
 
-      // فعّل شاشة الانتظار فوق الصورة
       _waiting = true;
       _waitMessage = '';
       notifyListeners();
 
-      // 2) أرسل المهام بالتوازي
+      // إرسال المهام (liveness + recognition)
       final futures = <Future<void>>[];
 
       if (kEnableLiveness) {
+        final connected = await NetworkHelper.checkAndToastConnection();
+        if (!connected) {
+          _livenessResult = {'error': 'Check Your Internet Connection'};
+          _waiting = false;
+          notifyListeners();
+          return;
+        }
         futures.add(
-          _net.sendLiveness(file.path).then((liveJson) {
-            if (_activeCaptureSeq != seq) return; // تجاهل نتائج متأخرة
+          _net.sendLiveness(ovalFile.path).then((liveJson) {
+            if (_activeCaptureSeq != seq) return;
             _livenessResult = liveJson ?? {'error': 'Invalid response'};
             notifyListeners();
           }).catchError((e) {
@@ -756,9 +946,16 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
         );
       }
 
-      if (kEnableFaceRecognition) {
+      await Future.wait(futures);
+      if (kEnableFaceRecognition  &&
+          _livenessResult != null &&
+          _livenessResult?['status'] == 'ok' &&
+          _livenessResult?['result']?['liveness'] == true) {
+        final connected = await NetworkHelper.checkAndToastConnection();
+        if (!connected) return;
+
         futures.add(
-          _net.sendFaceRecognition(file.path).then((recog) {
+          _net.sendFaceRecognition(ovalFile.path).then((recog) async {
             if (_activeCaptureSeq != seq) return;
             _faceRecognitionResult = recog ?? {'error': 'Invalid response'};
             notifyListeners();
@@ -770,44 +967,24 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
         );
       }
 
-      // 3) مهلات آمنة لمنع "التجمّد"
-      // Soft timeout: غيّر الرسالة لكن لا تفرض الرجوع
-      final soft = Future.delayed(
-        Duration(milliseconds: kSoftTimeoutMs),
-            () {
-          if (_activeCaptureSeq == seq && _waiting) {
-            _waitMessage = 'Taking longer than usual…';
-            notifyListeners();
-          }
-        },
-      );
+      // Soft timeout
+      Future.delayed(Duration(milliseconds: kSoftTimeoutMs), () {
+        if (_activeCaptureSeq == seq && _waiting) {
+          _waitMessage = 'Taking longer than usual…';
+          notifyListeners();
+        }
+      });
 
-      // Hard timeout: ابدأ العدّاد حتى لو النتائج لم تكتمل
-      final hard = Future.delayed(
-        Duration(milliseconds: kHardTimeoutMs),
-      );
+      await Future.wait(futures);
 
-      // انتظر اكتمال النتائج أو hard timeout (أيهما أولًا)
-      if (futures.isEmpty) {
-        // لا يوجد مهام أصلاً: اعتبرها مكتملة فورًا
-        await Future.delayed(Duration(milliseconds: 50));
-      } else {
-        await Future.any([
-          Future.wait(futures).catchError((_) {}),
-          hard,
-        ]);
-      }
-      // دع soft يعمل لوحده (لا حاجة للانتظار له)
-      unawaited(soft);
+      await _maybeAutoPostAttendance();
 
-      // 4) أوقف شاشة الانتظار وابدأ عدّاد العرض ثم ارجع للبث
       if (_activeCaptureSeq == seq) {
         _waiting = false;
         notifyListeners();
         await _startDisplayAndResume(seq: seq);
       }
     } catch (_) {
-      // خطأ عام: أعرض بانر خطأ قصير ثم ارجع
       _livenessResult ??= {'error': 'Error sending image to backend!'};
       _waiting = false;
       notifyListeners();
@@ -913,8 +1090,8 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
       return t * t * (3 - 2 * t);
     }
 
-    final up   = sstep(_sizeCfg.rawMin,   _sizeCfg.rawIdeal, raw);
-    final down = 1.0 - sstep(_sizeCfg.rawIdeal, _sizeCfg.rawMax,   raw);
+    final up = sstep(_sizeCfg.rawMin, _sizeCfg.rawIdeal, raw);
+    final down = 1.0 - sstep(_sizeCfg.rawIdeal, _sizeCfg.rawMax, raw);
     final peak = math.min(up, down);
     return peak.clamp(0.0, 1.0);
   }
@@ -928,9 +1105,9 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     if (screenSize == Size.zero) return 0.0;
 
     final srcW = imageRawSize.height; // portrait width
-    final srcH = imageRawSize.width;  // portrait height
+    final srcH = imageRawSize.width; // portrait height
     final scale = math.max(screenSize.width / srcW, screenSize.height / srcH);
-    final dxPad = (screenSize.width  - srcW * scale) / 2.0;
+    final dxPad = (screenSize.width - srcW * scale) / 2.0;
     final dyPad = (screenSize.height - srcH * scale) / 2.0;
 
     double cx = faceCenterRaw.dx * scale + dxPad;
@@ -941,9 +1118,9 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
       cx = 2 * midX - cx;
     }
 
-    final ovalCx = screenSize.width  * (0.5 + kOvalCxOffsetPct);
+    final ovalCx = screenSize.width * (0.5 + kOvalCxOffsetPct);
     final ovalCy = screenSize.height * (0.5 + kOvalCyOffsetPct);
-    final ovalRx = (screenSize.width  * kOvalRxPct);
+    final ovalRx = (screenSize.width * kOvalRxPct);
     final ovalRy = (screenSize.height * kOvalRyPct);
 
     final dxn = (cx - ovalCx) / (ovalRx == 0 ? 1 : ovalRx);
@@ -961,7 +1138,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
   double _estimateLuma(CameraImage image, {bool smooth = true}) {
     final group = image.format.group;
     final stepY = math.max(1, image.height ~/ 36);
-    final stepX = math.max(1, image.width  ~/ 64);
+    final stepX = math.max(1, image.width ~/ 64);
 
     int sum = 0, count = 0;
 
@@ -979,7 +1156,8 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
           final g = bytes[idx + 1];
           final r8 = bytes[idx + 2];
           final l = ((299 * r8 + 587 * g + 114 * b) / 1000).round();
-          sum += l; count++;
+          sum += l;
+          count++;
         }
       }
     } else {
@@ -1001,13 +1179,14 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     final raw = (count == 0) ? 0.0 : (sum / count);
     if (!smooth) return raw;
     final alpha = 0.25;
-    _lumaEma = (_lumaEma == null) ? raw : (_lumaEma! + alpha * (raw - _lumaEma!));
+    _lumaEma =
+    (_lumaEma == null) ? raw : (_lumaEma! + alpha * (raw - _lumaEma!));
     return _lumaEma!.clamp(0.0, 255.0);
   }
 
   String _statusForLuma(double v) {
-    if (v <  30) return "Very dark ❌";
-    if (v <  60) return "Too dim ❌";
+    if (v < 30) return "Very dark ❌";
+    if (v < 60) return "Too dim ❌";
     if (v < 100) return "Dim light ⚠️";
     if (v < 160) return "Good lighting ✅";
     if (v < 220) return "Excellent lighting 🌟";
@@ -1062,6 +1241,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     // نظّف النتائج والبيانات
     _livenessResult = null;
     _faceRecognitionResult = null;
+    _attendanceResult = null;
     _capturedFile = null;
     _lastFaceRect = null;
     _sizeRaw = null;
@@ -1094,5 +1274,179 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
       }
     }
   }
+
+  // ======= 💡 استدعاء الحضور تلقائيًا عند توفر employee_id   =======
+  Future<void> _maybeAutoPostAttendance() async {
+    if (_postedAttendanceForThisCapture) {
+      debugPrint('[ATT] Skipped: already posted for this capture.');
+      return;
+    }
+
+    final recog = _faceRecognitionResult;
+    if (recog == null) {
+      debugPrint('[ATT] Skipped: no faceRecognitionResult yet.');
+      return;
+    }
+
+    // لطباعة الاستجابة كما هي للمراجعة
+    debugPrint('[FR][RAW] $recog');
+
+
+    // ==== Helpers محلية لاستخراج القيم بأمان ====
+    dynamic _get(Map m, List path) {
+      dynamic cur = m;
+      for (final k in path) {
+        if (cur is Map && cur.containsKey(k)) {
+          cur = cur[k];
+        } else {
+          return null;
+        }
+      }
+      return cur;
+    }
+
+    int? _asInt(dynamic v) {
+      if (v == null) return null;
+      if (v is int) return v;
+      if (v is String) return int.tryParse(v);
+      if (v is num) return v.toInt();
+      return null;
+    }
+
+    String? _asStr(dynamic v) {
+      if (v == null) return null;
+      if (v is String) return v.trim().isEmpty ? null : v.trim();
+      if (v is num) return v.toString();
+      return null;
+    }
+
+    // ==== جرّب جميع المسارات الشائعة ====
+    final Map<String, dynamic> R = Map<String, dynamic>.from(recog);
+
+    final employeeId = _asInt(
+        _get(R, ['employee_id']) ??
+            _get(R, ['match', 'employee_id']) ??
+            _get(R, ['match', 'employee', 'id']) ??
+            _get(R, ['match', 'employee_data', 'id'])
+    );
+
+
+
+
+    if (employeeId == null) {
+      debugPrint('[ATT] Skipped: neither employee_id  found in recog.');
+      return;
+    }
+
+    final nowStr = formatDateTime(DateTime.now());
+    // final nowStr = formatDateTime(DateTime.parse("2025-10-11 07:30:00"));
+
+    try {
+      ApiResult result;
+      if (employeeId == null) {
+        debugPrint('[ATT] Skip: employee_id is null, not posting attendance.');
+        return;
+      }
+
+      result = await AttendanceService.storeByEmployeeId(
+        employeeId: employeeId,
+        dateTime: nowStr,
+      );
+
+
+// خزّن رسالة الرد الأولى (قد تحتوي "please specify type")
+      final String firstMessage = (result.message ?? '').toString().trim();
+
+// ✅ لو السيرفر طلب type → افتح المودال
+      if (result.needType == true) {
+        final String? picked = await (onRequireType?.call());
+
+        if (picked != null) {
+          // إعادة الإرسال مع النوع المختار
+          result = await AttendanceService.storeByEmployeeId(
+            employeeId: employeeId,
+            dateTime: nowStr,
+            type: picked,
+          );
+        } else {
+          // المستخدم أغلق المودال → اطبع رسالة السيرفر كما هي (أو بديل)
+          _attendanceResult = {
+            'status': 'error',
+            'message': firstMessage.isNotEmpty ? firstMessage : 'Type not selected',
+          };
+          _postedAttendanceForThisCapture = true;
+          _lastApiOk = false;
+          _lastApiMessage = _attendanceResult!['message'];
+          notifyListeners();
+          return;
+        }
+      }
+
+// من هنا: عندنا نتيجة نهائية (نجاح/فشل) من أحد الطلبين
+      debugPrint('resultAttendance ${result.ok}__${result.message}');
+      _postedAttendanceForThisCapture = true;
+
+      _lastApiOk = result.ok;
+      _lastApiMessage = result.message;
+
+// أعرض رسالة السيرفر كما هي
+      _attendanceResult = {
+        'status': result.ok ? 'ok' : 'error',
+        'message': result.message,
+      };
+
+      debugPrint('[ATT][RESPONSE] ok=${result.ok}, msg=${result.message}');
+      notifyListeners();
+      debugPrint('resultAttendance${result.ok}__${result.message}');
+      _postedAttendanceForThisCapture = true;
+
+      _lastApiOk = result.ok;
+      _lastApiMessage = result.message;
+
+      // ✅ أضف هذا السطر:
+      _attendanceResult = {
+        'status': result.ok ? 'ok' : 'error',
+        'message': result.message,
+      };
+
+      debugPrint('[ATT][RESPONSE] ok=${result.ok}, msg=${result.message}');
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[ATT][ERROR] $e');
+    }
+  }
+  Future<void> toggleCamera() async {
+    final hasFront = _frontCamera != null;
+    final hasRear  = _rearCamera  != null;
+
+    if (!(hasFront && hasRear)) {
+      debugPrint('ℹ️ Only one camera available; toggle ignored.');
+      return;
+    }
+
+    try {
+      await _stopStreamSafely();
+      await _disposeCamera();
+
+      _useFront = !_useFront; // ✅ قلب الاختيار بين الأمامية والخلفية
+
+      // نظّف الحالة
+      _capturedFile = null;
+      _livenessResult = null;
+      _faceRecognitionResult = null;
+      _attendanceResult = null;
+      _ratioProgress = 0.0;
+      _insideOval = false;
+      _faceDetected = false;
+      _setCaptureEligible(false);
+      notifyListeners();
+
+      await _initCamera();   // ✅ أعد فتح الكاميرا الجديدة
+      _resetInactivity();
+    } catch (e) {
+      debugPrint('❌ toggleCamera error: $e');
+    }
+  }
+
 
 }

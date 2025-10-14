@@ -22,6 +22,13 @@ class LivenessNetworkService {
 
 
   Future<Map<String, dynamic>?> sendLiveness(String imagePath) async {
+    // return {
+    //   'status': 'ok',
+    //   'result': {
+    //     'liveness': true,
+    //     'score' : 0.9555,
+    //   },
+    // };
     final uri = Uri.parse('https://workbench.ressystem.com/api/hr/liveness');
     final req = http.MultipartRequest('POST', uri)
       ..files.add(await http.MultipartFile.fromPath('image', imagePath));
@@ -38,9 +45,6 @@ class LivenessNetworkService {
       final streamed = await io.send(req).timeout(const Duration(seconds: 12));
       final res = await http.Response.fromStream(streamed);
 
-      debugPrint('⬅️ Response status: ${res.statusCode}');
-      debugPrint('Response headers: ${res.headers}');
-      debugPrint('Response body: ${res.body}');
 
       if (res.body.isEmpty) return null;
       return jsonDecode(res.body) as Map<String, dynamic>;

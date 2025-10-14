@@ -1,15 +1,31 @@
 import 'package:flutter/foundation.dart';
 import 'package:my_app/features/settings/settings_store.dart';
 
-/// ------- API endpoints -------
-const String kFaceRecognitionApiUrl =
-    'https://workbench.ressystem.com/api/hr/faceRecognition';
 
+
+/// ------- API Base URL -------
+const String kApiBaseUrl = "https://workbench.ressystem.com";
+
+
+/// ------- API endpoints -------
+const String kFaceRecognitionApiUrl = "$kApiBaseUrl/api/hr/identifyEmployee";
+const String kAttendanceApiUrl      = "$kApiBaseUrl/api/hr/attendance/store";
 
 
 /// ------- Face fit thresholds -------
 const double kMinFaceRatio = 0.06;
 const double kFitRelaxFactor = 1.30;
+
+
+
+/// ------- UI feature flags -------
+bool get kShowSwitchCameraButton {
+  try {
+    return SettingsStore.I.value.showSwitchCameraButton;
+  } catch (_) {
+    return false; // fallback لو ما وصلت قيمة من السيرفر
+  }
+}
 
 /// ------- Ellipse window (screen %) -------
 /// ملاحظة: نستخدم getters ديناميكية لقراءة القيم من SettingsStore (إن وُجدت)
@@ -55,7 +71,7 @@ int get kScreensaverSeconds {
   }
 }
 // مدة بقاء الصورة بعد اكتمال النتائج أو تفعيل fallback
-const int kDisplayImageMs   = 10000;
+const int kDisplayImageMs   = 5000;
 
 // مهلة لعرض رسالة "يطول أكثر من المعتاد"
 const int kSoftTimeoutMs    = 2500;
@@ -81,7 +97,7 @@ bool get kEnableFaceRecognition {
   try {
     return SettingsStore.I.value.enableFaceRecognition;
   } catch (_) {
-    return false; // fallback
+    return true; // fallback
   }
 }
 
@@ -89,6 +105,33 @@ bool get kEnableFaceRecognition {
 const double kCenterEpsilonPct = 0.18; // جرّب 0.15..0.22 حسب ذوقك
 
 /// ------- Face size thresholds (faceShort/imgShort) -------
+
+/// ------- Face size thresholds (faceShort/imgShort) -------
+double get kFaceRawMin {
+  try {
+    return SettingsStore.I.value.faceRawMin;
+  } catch (_) {
+    return 0.20;
+  }
+}
+
+double get kFaceRawIdeal {
+  try {
+    return SettingsStore.I.value.faceRawIdeal;
+  } catch (_) {
+    return 0.22;
+  }
+}
+
+double get kFaceRawMax {
+  try {
+    return SettingsStore.I.value.faceRawMax;
+  } catch (_) {
+    return 0.50;
+  }
+}
+
+/// Class لتعريف إعدادات افتراضية
 class FaceSizeThresholds {
   final double rawMin;   // أصغر نسبة مقبولة (لو أقل ⇒ بعيد)
   final double rawIdeal; // النسبة المثلى
@@ -106,4 +149,30 @@ class FaceSizeThresholds {
     rawIdeal: 0.22, // مثالي
     rawMax: 0.50,   // قريب جداً
   );
+}
+
+/// ------- Crop scale factor -------
+/// 0.7 = الحجم الطبيعي, >1 = تكبير, <1 = تصغير
+double get kCropScale {
+  try {
+    return SettingsStore.I.value.cropScale;
+  } catch (_) {
+    return 0.7; // fallback
+  }
+}
+
+bool get kShowCameraScreen {
+  try {
+    return SettingsStore.I.value.showCameraScreen;
+  } catch (_) {
+    return true;
+  }
+}
+
+bool get kShowKeypadScreen {
+  try {
+    return SettingsStore.I.value.showKeypadScreen;
+  } catch (_) {
+    return true;
+  }
 }

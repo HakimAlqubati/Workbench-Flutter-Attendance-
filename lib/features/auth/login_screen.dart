@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:my_app/core/network_helper.dart';
+import 'package:my_app/core/toast_utils.dart';
 import 'package:my_app/features/face_liveness/services/auth_service.dart';
 import 'dart:ui';
+
+import 'package:platform_device_id_plus/platform_device_id.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -8,6 +12,7 @@ class LoginScreen extends StatefulWidget {
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
+
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
@@ -20,9 +25,10 @@ class _LoginScreenState extends State<LoginScreen> {
   final _auth = AuthService();
 
   @override
-  void initState() {
+  void initState()   {
     super.initState();
 
+     _getDeviceId();
     // فقط أثناء التطوير، املأ الحقول افتراضيًا
     assert(() {
       _emailCtrl.text = 'admin@admin.com';
@@ -31,8 +37,40 @@ class _LoginScreenState extends State<LoginScreen> {
     }());
   }
 
+  Future<String?> getDeviceUniqueId() async {
+    try {
+      final info = await PlatformDeviceId.deviceInfoPlugin.androidInfo;
+
+      if (info.version.sdkInt <= 28 &&
+          info.serialNumber.isNotEmpty &&
+          info.serialNumber.toLowerCase() != 'unknown') {
+        return info.serialNumber.replaceAll('.', '');
+      }
+      final id = await PlatformDeviceId.getDeviceId;
+      return id;
+    } catch (e) {
+      debugPrint('getDeviceUniqueId error: $e');
+      return null;
+    }
+  }
+
+
+  String? deviceId;
+  _getDeviceId() async {
+    deviceId = await getDeviceUniqueId();
+    debugPrint('DEVICEID ${deviceId ?? 'null'}');
+    if (deviceId != null) {
+      showCustomToast(message: deviceId!);
+    }
+    if (mounted) setState(() {});
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    // 🛡️ تحقق من الاتصال قبل المتابعة
+    final connected = await NetworkHelper.checkAndToastConnection();
+    if (!connected) return;
+
     setState(() { _loading = true; _error = null; });
     try {
       await _auth.login(
@@ -226,7 +264,28 @@ class _LoginScreenState extends State<LoginScreen> {
                                 fontSize: 12,
                                 letterSpacing: .2,
                               ),
+
                             ),
+                            IconButton(
+                              tooltip: 'Reload Device ID',
+                              icon: const Icon(Icons.refresh, size: 18, color: Colors.white70),
+                              onPressed: ()async{
+                                await _getDeviceId();
+                              }, // ← ينادي الدالة
+                            ),
+                            // if (deviceId != null) ...[
+                            //   const SizedBox(height: 8),
+                            //   Text(
+                            //     'Device ID: $_getDeviceId',
+                            //     textAlign: TextAlign.center,
+                            //     style: const TextStyle(
+                            //       color: Colors.white70,
+                            //       fontSize: 12,
+                            //       letterSpacing: .3,
+                            //     ),
+                            //   ),
+                            // ],
+
                           ],
                         ),
                       ),

@@ -18,6 +18,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   double ovalRx = kDefaultOvalRxPct;
   double ovalRy = kDefaultOvalRyPct;
+  int screensaver = 30; // القيمة الابتدائية
 
   @override
   void initState() {
@@ -25,6 +26,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final s = SettingsStore.I.value;
     _countdownCtrl = TextEditingController(text: s.countdownSeconds.toString());
     _screensaverCtrl = TextEditingController(text: s.screensaverSeconds.toString());
+    screensaver = s.screensaverSeconds.clamp(15, 30);
     ovalRx = s.ovalRxPct;
     ovalRy = s.ovalRyPct;
   }
@@ -50,7 +52,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _save() async {
     final cd = int.tryParse(_countdownCtrl.text.trim()) ?? 5;
-    final sv = (int.tryParse(_screensaverCtrl.text.trim()) ?? 30).clamp(15, 30).toInt();
+    // final sv = (int.tryParse(_screensaverCtrl.text.trim()) ?? 30).clamp(15, 30).toInt();
+    final sv = screensaver.clamp(15, 30);
 
     await SettingsStore.I.setCountdownSeconds(cd);
     await SettingsStore.I.setScreensaverSeconds(sv);
@@ -142,11 +145,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   Text(
                     '$label: ${value.toStringAsFixed(2)}',
-                    style: const TextStyle(color: Colors.white70),
+                    style: const TextStyle(color: Colors.white70,
+                    fontSize: 18),
+
                   ),
                   Text(
                     'Default: ${defaultValue.toStringAsFixed(2)}',
-                    style: const TextStyle(color: Colors.white38, fontSize: 12),
+                    style: const TextStyle(color: Colors.white38, fontSize: 15),
                   ),
                 ],
               ),
@@ -189,28 +194,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
         padding: const EdgeInsets.all(16),
         child: ListView(
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: _numberField(
-                    label: 'Countdown',
-                    controller: _countdownCtrl,
-                    // suffix: 'sec',
-                    hint: 'Default: 5',
-                    decimal: false,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _numberField(
-                    label: 'Screensaver',
-                    controller: _screensaverCtrl,
-                    // suffix: 'sec',
-                    hint: 'Default: 59 (min: 15)',
-                    decimal: false,
-                  ),
-                ),
-              ],
+            _adjustableField(
+              label: 'Countdown (sec)',
+              value: int.parse(_countdownCtrl.text).toDouble(),
+              defaultValue: 5,
+              onIncrement: () {
+                setState(() {
+                  final v = int.tryParse(_countdownCtrl.text) ?? 5;
+                  _countdownCtrl.text = (v + 1).toString();
+                });
+              },
+              onDecrement: () {
+                setState(() {
+                  final v = int.tryParse(_countdownCtrl.text) ?? 5;
+                  if (v > 1) _countdownCtrl.text = (v - 1).toString();
+                });
+              },
+            ),
+
+
+            _adjustableField(
+              label: 'Screensaver',
+              value: screensaver.toDouble(),
+              defaultValue: 30,
+              onIncrement: () {
+                setState(() {
+                  if (screensaver < 30) screensaver++;
+                });
+              },
+              onDecrement: () {
+                setState(() {
+                  if (screensaver > 15) screensaver--;
+                });
+              },
             ),
 
             const SizedBox(height: 12),
@@ -221,6 +237,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onIncrement: () => _adjustOvalValue(true, 0.01),
               onDecrement: () => _adjustOvalValue(true, -0.01),
             ),
+
             const SizedBox(height: 12),
             _adjustableField(
               label: 'Oval Height (Ry)',
@@ -229,6 +246,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onIncrement: () => _adjustOvalValue(false, 0.01),
               onDecrement: () => _adjustOvalValue(false, -0.01),
             ),
+
             const SizedBox(height: 16),
             SwitchListTile(
               title: const Text('Enable Face Recognition'),
@@ -240,7 +258,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 if (mounted) setState(() {});
               },
             ),
-
 
             const SizedBox(height: 12),
             ElevatedButton.icon(
@@ -254,10 +271,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
             ),
-
             const SizedBox(height: 12),
           ],
-        ),
+        )
+
       ),
     );
   }
