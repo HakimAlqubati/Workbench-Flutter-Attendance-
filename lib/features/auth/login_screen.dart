@@ -38,49 +38,31 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<String?> getDeviceUniqueId() async {
-    String? deviceId;
     try {
-      deviceId = await PlatformDeviceId.deviceInfoPlugin.androidInfo
-          .then<String?>((androidInfo) {
-        if (androidInfo.version.sdkInt <= 30) {
+      final info = await PlatformDeviceId.deviceInfoPlugin.androidInfo;
 
-          debugPrint('androidInfo.serialNumber_${androidInfo.serialNumber}');
-          debugPrint('cn1_${deviceId}');
-
-          return androidInfo.serialNumber.replaceAll('.', '');
-        } else {
-          debugPrint('cn2_${deviceId}');
-
-          final id =  PlatformDeviceId.getDeviceId;
-
-          debugPrint('cn3_${id}');
-
-          return id;
-        }
-
-      }).catchError((error) {
-
-        showCustomToast(message: "Error getting Android device ID: $error",backgroundColor: AppColors.primaryColor,
-        );
-        return null;
-      });
-      return deviceId;
-    } catch (e, stackTrace) {
-
-
+      if (info.version.sdkInt <= 28 &&
+          info.serialNumber.isNotEmpty &&
+          info.serialNumber.toLowerCase() != 'unknown') {
+        return info.serialNumber.replaceAll('.', '');
+      }
+      final id = await PlatformDeviceId.getDeviceId;
+      return id;
+    } catch (e) {
+      debugPrint('getDeviceUniqueId error: $e');
       return null;
     }
   }
 
+
   String? deviceId;
-    _getDeviceId() async {
+  _getDeviceId() async {
     deviceId = await getDeviceUniqueId();
-
-    debugPrint('DEVICEID${deviceId.toString()}');
-    showCustomToast(message: deviceId!);
-    setState(() {
-
-    });
+    debugPrint('DEVICEID ${deviceId ?? 'null'}');
+    if (deviceId != null) {
+      showCustomToast(message: deviceId!);
+    }
+    if (mounted) setState(() {});
   }
 
   Future<void> _submit() async {
@@ -287,11 +269,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             IconButton(
                               tooltip: 'Reload Device ID',
                               icon: const Icon(Icons.refresh, size: 18, color: Colors.white70),
-                              onPressed: (){
-                                setState(() {
-
-                                  getDeviceUniqueId();
-                                });
+                              onPressed: ()async{
+                                await _getDeviceId();
                               }, // ← ينادي الدالة
                             ),
                             // if (deviceId != null) ...[
