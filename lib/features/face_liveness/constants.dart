@@ -4,13 +4,16 @@ import 'package:my_app/features/settings/settings_store.dart';
 
 
 /// ------- API Base URL -------
-const String kApiBaseUrl = "https://workbench.ressystem.com";
+// const String kApiBaseUrl = "https://workbench.ressystem.com";
+// const String kApiBaseUrl = "http://192.168.8.149:9000";
+late String kApiBaseUrl; // تُعيَّن في الإقلاع قبل استعمالها
 
+String get kFaceRecognitionApiUrl => "$kApiBaseUrl/api/hr/identifyEmployee";
+String get kAttendanceApiUrl      => "$kApiBaseUrl/api/hr/attendance/store";
 
-/// ------- API endpoints -------
-const String kFaceRecognitionApiUrl = "$kApiBaseUrl/api/hr/identifyEmployee";
-const String kAttendanceApiUrl      = "$kApiBaseUrl/api/hr/attendance/store";
-
+// (اختياري) دالة موحّدة:
+String api(String path) => "$kApiBaseUrl$path";
+// ثم تستخدم: api("/api/hr/identifyEmployee")
 
 /// ------- Face fit thresholds -------
 const double kMinFaceRatio = 0.06;

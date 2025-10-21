@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:my_app/features/face_liveness/views/face_liveness_screen.dart';
+import 'package:my_app/features/home/home_screen.dart';
+import 'package:my_app/features/setup/enter_base_url_screen.dart';
 import 'package:my_app/theme/app_theme.dart';
 
 import 'core/navigation/routes.dart';
@@ -108,6 +110,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         AppRoutes.login: (_) => const LoginScreen(),
         AppRoutes.settings: (_) => const SettingsScreen(),
         AppRoutes.attendanceKeypad: (_) => const AttendanceKeypadScreen(),
+        AppRoutes.enterBaseUrl: (_) => const EnterBaseUrlScreen(),
+        AppRoutes.home: (_) => const HomeScreen(), // ← جديد
+
       },
       navigatorObservers: [_FullScreenObserver()],
       scrollBehavior: const _AppScrollBehavior(),

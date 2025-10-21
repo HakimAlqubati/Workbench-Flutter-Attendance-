@@ -1,8 +1,8 @@
+// lib/features/splash/splash_gate.dart
 import 'package:flutter/material.dart';
-import 'package:my_app/core/navigation/routes.dart';
-import 'package:my_app/core/widgets/app_watermark.dart';
-import 'package:my_app/features/face_liveness/services/auth_service.dart';
-import 'package:my_app/features/home/home_screen.dart';
+import 'package:my_app/core/config/base_url_store.dart';
+import 'package:my_app/features/face_liveness/constants.dart';
+import 'package:my_app/core/navigation/routes.dart'; // يحوي AppRoutes
 
 class SplashGate extends StatefulWidget {
   const SplashGate({super.key});
@@ -12,45 +12,33 @@ class SplashGate extends StatefulWidget {
 }
 
 class _SplashGateState extends State<SplashGate> {
-  final _auth = AuthService();
-
   @override
   void initState() {
     super.initState();
-    _go();
+    // نؤخر التنقل لما بعد أول فريم
+    WidgetsBinding.instance.addPostFrameCallback((_) => _decide());
   }
 
-  Future<void> _go() async {
-    try {
-    final session = await _auth.getSavedSession();
+  Future<void> _decide() async {
+    final saved = await BaseUrlStore.get(); // يقرأ من SharedPreferences
+
     if (!mounted) return;
 
-    if (session != null && session.token.isNotEmpty) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
+    if (saved == null || saved.isEmpty) {
+      // أول تشغيل: ما في URL محفوظ → افتح شاشة الإدخال
+      Navigator.of(context).pushReplacementNamed(AppRoutes.enterBaseUrl);
     } else {
-      Navigator.of(context).pushReplacementNamed(AppRoutes.login);
-    }
-    } catch (e, st) {
-      debugPrint('SplashGate._go error: $e\n$st');
-      if (!mounted) return;
-
-      // fallback: لو صار أي خطأ نروح لشاشة تسجيل الدخول
+      // موجود: ثبت القيمة واكمل للوجن
+      kApiBaseUrl = saved; // مهم قبل استعمال أي endpoint
       Navigator.of(context).pushReplacementNamed(AppRoutes.login);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // شاشة سبلاش خفيفة أثناء القرار
     return const Scaffold(
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          AppWatermark(),
-          Center(child: CircularProgressIndicator()),
-        ],
-      ),
+      body: Center(child: CircularProgressIndicator()),
     );
   }
 }

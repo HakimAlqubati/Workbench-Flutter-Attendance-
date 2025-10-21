@@ -310,11 +310,11 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
 
     // ✅ عيّن الأمامية والخلفية مع orElse غير قابل لـ null
     _frontCamera = _allCams.firstWhere(
-          (c) => c.lensDirection == CameraLensDirection.front,
+          (c) => c.lensDirection == CameraLensDirection.back,
       orElse: () => _allCams.first, // non-null
     );
     _rearCamera = _allCams.firstWhere(
-          (c) => c.lensDirection == CameraLensDirection.front,
+          (c) => c.lensDirection == CameraLensDirection.back,
       orElse: () => _allCams.first, // non-null
     );
 
@@ -355,7 +355,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
   // Future<void> _initCamera() async {
   //   final cameras = await availableCameras();
   //   _frontCamera = cameras.firstWhere(
-  //         (c) => c.lensDirection == CameraLensDirection.front,
+  //         (c) => c.lensDirection == CameraLensDirection.back,
   //     orElse: () => cameras.first,
   //   );
   //   _controller = CameraController(
@@ -560,7 +560,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
         final rawH = image.height.toDouble();
 
         final bool isFront =
-            _frontCamera?.lensDirection == CameraLensDirection.front;
+            _frontCamera?.lensDirection == CameraLensDirection.back;
 
         // داخل/مركز البيضاوي
         _insideOval = _isFaceInsideOvalOnScreen(
@@ -615,7 +615,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
             sizeRaw >= _sizeCfg.rawMin &&
             sizeRaw <= _sizeCfg.rawMax
 
-            && goodLighting
+            // && goodLighting
         ;
 
         _setCaptureEligible(eligible);

@@ -116,7 +116,7 @@ class CameraUI extends StatelessWidget {
             (reco['match']['found'] == true));
 
         if (recoOk == false) {
-          return Colors.red.withOpacity(0.5);
+          return Colors.red;
         }
 
         final bool? attOk = (attendance == null)
@@ -125,30 +125,26 @@ class CameraUI extends StatelessWidget {
 
         // 🟥 شرط خاص: لو liveness false → أحمر مباشرة
         if (liveOk == false) {
-          // showCustomToast(
-          //   message: 'Check Light',
-          //   backgroundColor: Colors.redAccent,
-          //   textColor: Colors.white,
-          // );
+         
 
           c.showBanner('Adjust The Lighting And Try Again');
 
-          return Colors.red.withOpacity(0.5);
+          return Colors.red;
         }
 
         c.clearBanner();
         // 👇 الحالة الافتراضية = أسود (ما في رد)
         if (liveOk == null || recoOk == null || attOk == null) {
-          return Colors.black.withOpacity(0.5);
+          return Colors.black;
         }
 
         // 👇 إذا الثلاثة ناجحين → أخضر
         if (liveOk && recoOk && attOk) {
-          return Colors.green.withOpacity(0.5);
+          return Colors.green;
         }
 
         // 👇 إذا واحد أو أكثر false → أحمر
-        return Colors.red.withOpacity(0.5);
+        return Colors.red;
       }(),
     ),
     ),
