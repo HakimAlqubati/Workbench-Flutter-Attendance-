@@ -247,17 +247,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onDecrement: () => _adjustOvalValue(false, -0.01),
             ),
 
-            const SizedBox(height: 16),
-            SwitchListTile(
-              title: const Text('Enable Face Recognition'),
-              subtitle: const Text('Turn on to check faces against database'),
-              value: s.enableFaceRecognition,
-              activeColor: primaryColor,
-              onChanged: (v) async {
-                await SettingsStore.I.setEnableFaceRecognition(v);
-                if (mounted) setState(() {});
-              },
-            ),
+            // const SizedBox(height: 16),
+            // SwitchListTile(
+            //   title: const Text('Enable Face Recognition'),
+            //   subtitle: const Text('Turn on to check faces against database'),
+            //   value: s.enableFaceRecognition,
+            //   activeColor: primaryColor,
+            //   onChanged: (v) async {
+            //     await SettingsStore.I.setEnableFaceRecognition(v);
+            //     if (mounted) setState(() {});
+            //   },
+            // ),
 
             const SizedBox(height: 12),
             ElevatedButton.icon(

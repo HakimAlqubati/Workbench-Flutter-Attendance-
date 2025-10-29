@@ -310,11 +310,11 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
 
     // ✅ عيّن الأمامية والخلفية مع orElse غير قابل لـ null
     _frontCamera = _allCams.firstWhere(
-          (c) => c.lensDirection == CameraLensDirection.back,
+          (c) => c.lensDirection == CameraLensDirection.front,
       orElse: () => _allCams.first, // non-null
     );
     _rearCamera = _allCams.firstWhere(
-          (c) => c.lensDirection == CameraLensDirection.back,
+          (c) => c.lensDirection == CameraLensDirection.front,
       orElse: () => _allCams.first, // non-null
     );
 
@@ -355,7 +355,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
   // Future<void> _initCamera() async {
   //   final cameras = await availableCameras();
   //   _frontCamera = cameras.firstWhere(
-  //         (c) => c.lensDirection == CameraLensDirection.back,
+  //         (c) => c.lensDirection == CameraLensDirection.front,
   //     orElse: () => cameras.first,
   //   );
   //   _controller = CameraController(
@@ -560,7 +560,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
         final rawH = image.height.toDouble();
 
         final bool isFront =
-            _frontCamera?.lensDirection == CameraLensDirection.back;
+            _frontCamera?.lensDirection == CameraLensDirection.front;
 
         // داخل/مركز البيضاوي
         _insideOval = _isFaceInsideOvalOnScreen(
@@ -615,7 +615,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
             sizeRaw >= _sizeCfg.rawMin &&
             sizeRaw <= _sizeCfg.rawMax
 
-            // && goodLighting
+            && goodLighting
         ;
 
         _setCaptureEligible(eligible);
@@ -1339,7 +1339,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     }
 
     final nowStr = formatDateTime(DateTime.now());
-    // final nowStr = formatDateTime(DateTime.parse("2025-10-11 07:30:00"));
+    // final nowStr = formatDateTime(DateTime.parse("2025-10-24 11:30:00"));
 
     try {
       ApiResult result;

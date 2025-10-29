@@ -104,6 +104,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ضع هذا داخل الـ build قبل الـ return أو أعلى الـ Column
+    final currentYear = DateTime.now().year;
     return Scaffold(
       // خلفية متدرجة داكنة
       body: Container(
@@ -271,16 +273,21 @@ class _LoginScreenState extends State<LoginScreen> {
 
                             const SizedBox(height: 22),
 
-                            // Footer
-                            const Text(
-                              '© 2025 Workbench',
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 12,
-                                letterSpacing: .2,
-                              ),
 
-                            ),
+
+// ... وبدّل ودجت الـ Text السفلية بهذا:
+      Semantics(
+      label: 'Copyright $currentYear NLT Workbench',
+      child: Text(
+        '© $currentYear NLT Workbench',
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          color: Colors.white70,
+          fontSize: 12,
+          letterSpacing: .2,
+        ),
+      ),
+    ),
                             IconButton(
                               tooltip: 'Copy Device ID',
                               icon: const Icon(Icons.copy, size: 18, color: Color(0xFF19E6C1)), // <--- Changed color for visibility
