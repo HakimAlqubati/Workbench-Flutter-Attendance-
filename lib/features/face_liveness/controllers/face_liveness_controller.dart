@@ -57,7 +57,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
   List<CameraDescription> _allCams = const [];
 
 
-  bool _useFront = true; // ✅ الحالة الحالية: true = أمامية
+  bool _useFront = false; // ✅ الحالة الحالية: false = خلفية (افتراضياً)
   bool get isFrontCamera => _useFront;
   CameraDescription? _rearCamera;
   // ===== Detector =====
@@ -352,37 +352,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
   }
 
 
-  // Future<void> _initCamera() async {
-  //   final cameras = await availableCameras();
-  //   _frontCamera = cameras.firstWhere(
-  //         (c) => c.lensDirection == CameraLensDirection.front,
-  //     orElse: () => cameras.first,
-  //   );
-  //   _controller = CameraController(
-  //     _frontCamera!,
-  //     ResolutionPreset.medium,
-  //     enableAudio: false,
-  //     imageFormatGroup: ImageFormatGroup.nv21,
-  //   );
-  //   await _controller!.initialize();
-  //   await _controller!.lockCaptureOrientation(DeviceOrientation.portraitUp);
-  //
-  //   _latestImageSize = Size(
-  //     _controller!.value.previewSize?.width ?? 1280,
-  //     _controller!.value.previewSize?.height ?? 720,
-  //   );
-  //
-  //   _controller!.addListener(() async {
-  //     final v = _controller!.value;
-  //     if (v.hasError) {
-  //       await _stopStreamSafely();
-  //       await _startStreamSafely();
-  //     }
-  //   });
-  //
-  //   await _startStreamSafely();
-  //   notifyListeners();
-  // }
+  
 
   Future<void> _disposeCamera() async {
     try {
@@ -1339,7 +1309,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     }
 
     final nowStr = formatDateTime(DateTime.now());
-    // final nowStr = formatDateTime(DateTime.parse("2025-10-24 11:30:00"));
+    // final nowStr = formatDateTime(DateTime.parse("2025-12-13 01:55:00"));
 
     try {
       ApiResult result;

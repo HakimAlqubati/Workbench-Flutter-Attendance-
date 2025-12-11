@@ -9,7 +9,7 @@ import 'package:my_app/features/settings/settings_store.dart';
 late String kApiBaseUrl; // تُعيَّن في الإقلاع قبل استعمالها
 
 String get kFaceRecognitionApiUrl => "$kApiBaseUrl/api/hr/identifyEmployee";
-String get kAttendanceApiUrl      => "$kApiBaseUrl/api/hr/attendance/store";
+String get kAttendanceApiUrl      => "$kApiBaseUrl/api/v2/attendance/test";
 
 // (اختياري) دالة موحّدة:
 String api(String path) => "$kApiBaseUrl$path";
