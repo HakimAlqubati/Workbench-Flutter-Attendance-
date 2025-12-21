@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:my_app/core/navigation/routes.dart';
 import 'package:my_app/core/network_helper.dart';
 import 'package:my_app/core/toast_utils.dart';
 import 'package:my_app/features/face_liveness/services/auth_service.dart';
@@ -23,6 +25,15 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _error;
 
   final _auth = AuthService();
+
+  Future<void> _copyDeviceId() async {
+    if (deviceId != null) {
+      await Clipboard.setData(ClipboardData(text: deviceId!));
+      // showCustomToast(message: 'Device ID copied to clipboard'); // تأكيد النسخ
+    } else {
+      // showCustomToast(message: 'No Device ID to copy');
+    }
+  }
 
   @override
   void initState()   {
@@ -60,7 +71,7 @@ class _LoginScreenState extends State<LoginScreen> {
     deviceId = await getDeviceUniqueId();
     debugPrint('DEVICEID ${deviceId ?? 'null'}');
     if (deviceId != null) {
-      showCustomToast(message: deviceId!);
+      // showCustomToast(message: deviceId!);
     }
     if (mounted) setState(() {});
   }
@@ -79,7 +90,11 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       if (!mounted) return;
       // بعد النجاح ادخل المستخدم إلى شاشتك الرئيسية
-      Navigator.of(context).pushReplacementNamed('/');
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        AppRoutes.home,
+            (route) => false,
+      );
+      // Navigator.of(context).pushReplacementNamed('/');
     } catch (e) {
       setState(() => _error = 'Sign-in failed. ${e.toString()}');
     } finally {
@@ -89,6 +104,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ضع هذا داخل الـ build قبل الـ return أو أعلى الـ Column
+    final currentYear = DateTime.now().year;
     return Scaffold(
       // خلفية متدرجة داكنة
       body: Container(
@@ -256,35 +273,39 @@ class _LoginScreenState extends State<LoginScreen> {
 
                             const SizedBox(height: 22),
 
-                            // Footer
-                            const Text(
-                              '© 2025 Workbench',
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 12,
-                                letterSpacing: .2,
-                              ),
 
-                            ),
+
+// ... وبدّل ودجت الـ Text السفلية بهذا:
+      Semantics(
+      label: 'Copyright $currentYear NLT Workbench',
+      child: Text(
+        '© $currentYear NLT Workbench',
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          color: Colors.white70,
+          fontSize: 12,
+          letterSpacing: .2,
+        ),
+      ),
+    ),
                             IconButton(
-                              tooltip: 'Reload Device ID',
-                              icon: const Icon(Icons.refresh, size: 18, color: Colors.white70),
-                              onPressed: ()async{
-                                await _getDeviceId();
-                              }, // ← ينادي الدالة
+                              tooltip: 'Copy Device ID',
+                              icon: const Icon(Icons.copy, size: 18, color: Color(0xFF19E6C1)), // <--- Changed color for visibility
+                              onPressed: _copyDeviceId, // <--- Calls the new copy function
                             ),
-                            // if (deviceId != null) ...[
-                            //   const SizedBox(height: 8),
-                            //   Text(
-                            //     'Device ID: $_getDeviceId',
-                            //     textAlign: TextAlign.center,
-                            //     style: const TextStyle(
-                            //       color: Colors.white70,
-                            //       fontSize: 12,
-                            //       letterSpacing: .3,
-                            //     ),
-                            //   ),
-                            // ],
+
+                            if (deviceId != null) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                'Device ID: $deviceId',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                  letterSpacing: .3,
+                                ),
+                              ),
+                            ],
 
                           ],
                         ),

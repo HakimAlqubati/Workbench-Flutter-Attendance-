@@ -45,7 +45,7 @@ const _kDefaultFaceRawMax             = 0.50;
 const _kDefaultCropScale              = 0.7;
 
 /// -------- رابط API للإعدادات --------
-const _kSettingsApiUrl = '$kApiBaseUrl/api/app/settings';
+String get _kSettingsApiUrl => '$kApiBaseUrl/api/app/settings';
 
 /// -------- موديل الإعدادات --------
 class AppSettings {

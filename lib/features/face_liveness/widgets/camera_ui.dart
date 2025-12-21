@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:my_app/core/toast_utils.dart';
+import 'package:my_app/features/attendance/attendance_service.dart';
 import 'package:my_app/features/face_liveness/controllers/face_liveness_controller.dart';
 import 'package:my_app/features/face_liveness/painters/frame_glow_painter.dart';
 import 'package:my_app/features/face_liveness/painters/frame_mask_painter.dart';
@@ -77,6 +78,9 @@ class CameraUI extends StatelessWidget {
     final cam = c.controller;
     final size = MediaQuery.of(context).size;
 
+    // ✅ هنا أضف السطر قبل أي استخدام للخدمة:
+    AttendanceService.onRequireType = () => _askTypeModal(context);
+
     // الأساس: المعاينة أو الصورة الملتقطة
     final Widget basePreview = (c.capturedFile != null)
         ? Transform(
@@ -95,7 +99,7 @@ class CameraUI extends StatelessWidget {
     final Color ovalActiveColor =
     c.captureEligible ? const Color(0xff0fd86e) : const Color(0xffffb74d);
 
-    // c.onRequireType ??= () => _askTypeModal(context);
+    c.onRequireType ??= () => _askTypeModal(context);
 
     return Stack(children: [
     Positioned.fill(
@@ -116,7 +120,7 @@ class CameraUI extends StatelessWidget {
             (reco['match']['found'] == true));
 
         if (recoOk == false) {
-          return Colors.red.withOpacity(0.5);
+          return Colors.red;
         }
 
         final bool? attOk = (attendance == null)
@@ -125,30 +129,26 @@ class CameraUI extends StatelessWidget {
 
         // 🟥 شرط خاص: لو liveness false → أحمر مباشرة
         if (liveOk == false) {
-          // showCustomToast(
-          //   message: 'Check Light',
-          //   backgroundColor: Colors.redAccent,
-          //   textColor: Colors.white,
-          // );
+         
 
           c.showBanner('Adjust The Lighting And Try Again');
 
-          return Colors.red.withOpacity(0.5);
+          return Colors.red;
         }
 
         c.clearBanner();
         // 👇 الحالة الافتراضية = أسود (ما في رد)
         if (liveOk == null || recoOk == null || attOk == null) {
-          return Colors.black.withOpacity(0.5);
+          return Colors.black;
         }
 
         // 👇 إذا الثلاثة ناجحين → أخضر
         if (liveOk && recoOk && attOk) {
-          return Colors.green.withOpacity(0.5);
+          return Colors.green;
         }
 
         // 👇 إذا واحد أو أكثر false → أحمر
-        return Colors.red.withOpacity(0.5);
+        return Colors.red;
       }(),
     ),
     ),
@@ -381,7 +381,7 @@ class _RecognitionBanner extends StatelessWidget {
     final score = m['score'] ?? j['score'] ?? j['similarity'];
     if (!found) {
       final lower = name.toString().toLowerCase();
-      if (lower.contains('no match')) return 'No match found ❌';
+      if (lower.contains('no match')) return 'No face match found. Please try again';
       return 'No match ❌';
     }
     final parts = <String>['$name'];

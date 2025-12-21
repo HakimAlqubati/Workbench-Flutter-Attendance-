@@ -36,30 +36,57 @@ class ApiResult {
 
 
 bool _needsType(http.Response res) {
-  if (res.statusCode == 422) return true;
   try {
     final json = jsonDecode(res.body);
-    final msg = (json['message'] ?? '').toString().toLowerCase();
-    return msg.contains('please specify type');
-  } catch (_) {
+    final typeRequired = json['type_required'] == true;
+    debugPrint('zzz type_required => $typeRequired');
+    return typeRequired;
+  } catch (e) {
+    debugPrint('needsType parse error: $e');
     return false;
   }
 }
 
+
 class AttendanceService {
 
-  Future<String?> Function()? onRequireType;
+  static Future<String?> Function()? onRequireType;
+
 
   static Future<ApiResult> storeByRfid({
     required String rfid,
     required String dateTime, // "YYYY-MM-DD HH:mm:ss"
     Map<String, String>? headers,
   }) async {
-    return _postAttendance(body: {
-      "rfid": rfid,
-      "date_time": dateTime,
-    }, headers: headers);
+    // 1) أول محاولة بدون type
+    final first = await _postAttendance(
+      body: {
+        "rfid": rfid,
+        "date_time": dateTime,
+      },
+      headers: headers,
+    );
+
+    // 2) لو السيرفر طلب النوع → اسأله المستخدم ثم أعد المحاولة
+    if (first.needType) {
+      final t = (await onRequireType?.call())?.trim().toLowerCase();
+      if (t == null) {
+        return ApiResult(ok: false, message: "Operation cancelled by user.");
+      }
+
+      return _postAttendance(
+        body: {
+          "rfid": rfid,
+          "date_time": dateTime,
+          "type": t,
+        },
+        headers: headers,
+      );
+    }
+
+    return first;
   }
+
 
   static Future<ApiResult> storeByEmployeeId({
     required int employeeId,

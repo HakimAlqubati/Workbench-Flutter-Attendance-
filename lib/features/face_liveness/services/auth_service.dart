@@ -1,8 +1,11 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:my_app/core/device_id_manager.dart';
+import 'package:my_app/core/toast_utils.dart';
+import 'package:my_app/features/face_liveness/constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const String kLoginUrl = 'https://workbench.ressystem.com/api/login';
+String get kLoginUrl => '$kApiBaseUrl/api/login';
 
 class AuthSession {
   final String token;
@@ -32,14 +35,20 @@ class AuthSession {
 class AuthService {
   /// يسجّل الدخول ويرجع الجلسة، ويخزنها محليًا
   Future<AuthSession> login({required String username, required String password}) async {
+    // 🔐 اجلب/أضمن وجود الـ deviceId
+    final deviceId = await DeviceIdManager.ensureDeviceId();
     final res = await http.post(
       Uri.parse(kLoginUrl),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'username': username, 'password': password}),
+      body: jsonEncode({'username': username, 'password': password,'device_id': deviceId.toString()}),
     );
 
+
+    if(res.statusCode == 403){
+      throw Exception('Not Allowed ');
+    }
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw Exception('فشل الدخول (${res.statusCode})');
+      throw Exception('(${res.statusCode})');
     }
 
     final j = jsonDecode(res.body) as Map<String, dynamic>;
@@ -47,7 +56,7 @@ class AuthService {
     final user  = j['user'] as Map<String, dynamic>?;
 
     if (token == null || user == null) {
-      throw Exception('استجابة غير متوقعة من الخادم.');
+      throw Exception('Unexpected response from the server');
     }
 
     final session = AuthSession(
