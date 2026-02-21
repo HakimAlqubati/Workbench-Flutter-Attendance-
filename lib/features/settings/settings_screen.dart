@@ -26,7 +26,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final s = SettingsStore.I.value;
     _countdownCtrl = TextEditingController(text: s.countdownSeconds.toString());
     _screensaverCtrl = TextEditingController(text: s.screensaverSeconds.toString());
-    screensaver = s.screensaverSeconds.clamp(15, 30);
+    screensaver = s.screensaverSeconds.clamp(5, 30);
     ovalRx = s.ovalRxPct;
     ovalRy = s.ovalRyPct;
   }
@@ -53,7 +53,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _save() async {
     final cd = int.tryParse(_countdownCtrl.text.trim()) ?? 5;
     // final sv = (int.tryParse(_screensaverCtrl.text.trim()) ?? 30).clamp(15, 30).toInt();
-    final sv = screensaver.clamp(15, 30);
+    final sv = screensaver.clamp(5, 30);
 
     await SettingsStore.I.setCountdownSeconds(cd);
     await SettingsStore.I.setScreensaverSeconds(sv);
@@ -224,7 +224,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
               onDecrement: () {
                 setState(() {
-                  if (screensaver > 15) screensaver--;
+                  if (screensaver > 5) screensaver--;
                 });
               },
             ),

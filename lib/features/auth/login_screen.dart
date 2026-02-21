@@ -42,7 +42,7 @@ class _LoginScreenState extends State<LoginScreen> {
      _getDeviceId();
     // فقط أثناء التطوير، املأ الحقول افتراضيًا
     assert(() {
-      _emailCtrl.text = 'admin@admin.com';
+      _emailCtrl.text = 'att@admin.com';
       _passCtrl.text = '123456';
       return true;
     }());

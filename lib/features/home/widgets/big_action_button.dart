@@ -4,18 +4,26 @@ class BigActionButton extends StatelessWidget {
   final IconData icon;
   final String title;
   final VoidCallback onPressed;
+  final bool disabled;
 
   const BigActionButton({
     super.key,
     required this.icon,
     required this.title,
     required this.onPressed,
+    this.disabled = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return ElevatedButton(
-      onPressed: onPressed,
+      onPressed: disabled 
+          ? () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Not allowed.')),
+              );
+            }
+          : onPressed,
       style: ElevatedButton.styleFrom(
         padding: const EdgeInsets.all(10),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),

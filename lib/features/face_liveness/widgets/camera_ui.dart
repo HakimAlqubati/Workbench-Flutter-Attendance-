@@ -15,7 +15,7 @@ import 'package:my_app/features/face_liveness/widgets/gclass.dart';
 import 'package:my_app/features/face_liveness/widgets/oval_clipper.dart';
 import 'package:my_app/features/face_liveness/constants.dart';
 
-Future<String?> _askTypeModal(BuildContext context) async {
+Future<String?> askTypeModal(BuildContext context) async {
   String selected = 'checkin'; // افتراضي
 
   return await showDialog<String>(
@@ -78,8 +78,6 @@ class CameraUI extends StatelessWidget {
     final cam = c.controller;
     final size = MediaQuery.of(context).size;
 
-    // ✅ هنا أضف السطر قبل أي استخدام للخدمة:
-    AttendanceService.onRequireType = () => _askTypeModal(context);
 
     // الأساس: المعاينة أو الصورة الملتقطة
     final Widget basePreview = (c.capturedFile != null)
@@ -99,7 +97,6 @@ class CameraUI extends StatelessWidget {
     final Color ovalActiveColor =
     c.captureEligible ? const Color(0xff0fd86e) : const Color(0xffffb74d);
 
-    c.onRequireType ??= () => _askTypeModal(context);
 
     return Stack(children: [
     Positioned.fill(

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:my_app/features/face_liveness/constants.dart';
 import 'package:my_app/features/face_liveness/controllers/face_liveness_controller.dart';
 import 'package:my_app/features/face_liveness/widgets/top_hud.dart';
+import 'package:my_app/features/attendance/attendance_service.dart';
 import 'package:my_app/features/face_liveness/widgets/camera_ui.dart';
 import 'package:my_app/features/face_liveness/widgets/screensaver.dart';
 
@@ -45,6 +46,13 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
         ),
       );
     };
+
+    // ✅ تعيين onRequireType هنا بـ context ثابت (parent)
+    c.onRequireType = () {
+      if (!mounted) return Future.value(null);
+      return askTypeModal(context);
+    };
+    AttendanceService.onRequireType = c.onRequireType;
 
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
