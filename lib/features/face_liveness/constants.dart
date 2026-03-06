@@ -52,7 +52,7 @@ double get kOvalRyPct {
 }
 
 const double kOvalCxOffsetPct = 0.00;
-const double kOvalCyOffsetPct = -0.03;
+const double kOvalCyOffsetPct = -0.10;
 
 /// ------- Inside tolerance -------
 const double kOvalInsideEpsilon = 0.95; // was 0.20 (too strict)

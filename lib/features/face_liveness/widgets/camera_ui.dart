@@ -189,9 +189,10 @@ class CameraUI extends StatelessWidget {
 
 
       // عدّاد الالتقاط
+      // oval bottom ≈ (0.5 - 0.10 + 0.27) = 0.67 → guidance/countdown just below at 0.69
       if (c.cameraOpen && c.countdown != null && c.captureEligible && c.capturedFile == null)
         Positioned(
-          bottom: size.height * 0.18,
+          top: size.height * 0.69,
           left: 0, right: 0,
           child: Center(
             child: TweenAnimationBuilder<double>(
@@ -218,12 +219,13 @@ class CameraUI extends StatelessWidget {
         )
       else if (c.cameraOpen && !c.captureEligible)
         Positioned(
-          bottom: size.height * 0.18, left: 0, right: 0,
+          top: size.height * 0.69, left: 0, right: 0,
           child: Center(
             child: Text(
               _guidanceText(c),
+              textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: size.width * 0.08,
+                fontSize: size.width * 0.055,
                 fontWeight: FontWeight.w600,
                 color: Colors.amberAccent,
                 decoration: TextDecoration.none,
@@ -234,6 +236,52 @@ class CameraUI extends StatelessWidget {
         ),
 
 
+
+      // ── Privacy warning banner below the oval ──
+      if (c.cameraOpen && c.capturedFile == null)
+        Positioned(
+          // guidance text at 0.69, leave ~8% gap → warning at 0.77
+          top: size.height * 0.77,
+          left: 20,
+          right: 20,
+          child: IgnorePointer(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.72),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Shield icon
+                  Container(
+                    margin: const EdgeInsets.only(top: 2, right: 10),
+                    child: const Icon(
+                      Icons.verified_user_rounded,
+                      color: Color(0xFFFFD600),
+                      size: 28,
+                    ),
+                  ),
+                  // Disclaimer text
+                  const Expanded(
+                    child: Text(
+                      'By proceeding, you acknowledge that your photo will be securely stored and may be accessed by authorized personnel for compliance monitoring, audit requirements, and quality assurance.',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        height: 1.45,
+                        decoration: TextDecoration.none,
+                        letterSpacing: 0.1,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
 
       if (c.cameraOpen && c.capturedFile == null)
         FaceRatioBar(
@@ -250,7 +298,7 @@ class CameraUI extends StatelessWidget {
 
       if (c.attendanceResult != null)
         AttendanceBanner(json: c.attendanceResult!),
-      if (c.capturedFile != null && c.waiting)
+      if (c.capturedFile != null && c.waiting && !c.processingDone)
         Positioned.fill(
           child: Container(
             color: Colors.black.withOpacity(0.28),
@@ -259,7 +307,7 @@ class CameraUI extends StatelessWidget {
           ),
         ),
 
-      if (c.capturedFile != null && !c.waiting)
+      if (c.capturedFile != null && c.processingDone)
         Positioned(
           bottom: MediaQuery.of(context).padding.bottom + 20,
           right: 16,
@@ -341,15 +389,13 @@ class CameraUI extends StatelessWidget {
   // == helpers ==
   String _guidanceText(FaceLivenessController c) {
     final status = c.brightnessStatus ?? '';
-    // if (status.contains('❌') && (status.contains('dark') || status.contains('dim'))) {
-    //   return "Find better lighting";
-    // }
+    
     if (status.contains('⚠️') && status.contains('bright')) {
       return "Avoid direct light";
     }
     if (c.tooFar) return "Move In";
     if (c.tooClose) return "Move Back";
-    return "Center Your Face";
+    return "Center your face and look directly at the camera";
   }
   bool _isRecognitionOk(Map<String, dynamic>? j) {
     if (j == null) return false;          // لا توجد نتيجة => اعتبرها فشل
@@ -370,21 +416,29 @@ class _RecognitionBanner extends StatelessWidget {
   const _RecognitionBanner({required this.json});
 
   String _text(Map<String, dynamic> j) {
-    if (j['error'] != null) return '❌ (${j['error']})';
-    final Map<String, dynamic> m = (j['match'] is Map) ? Map<String, dynamic>.from(j['match']) : {};
+    // ── خطأ من السيرفر ──
+    if (j['error'] != null) return '❌ ${j['error']}';
+
+    final Map<String, dynamic> m = (j['match'] is Map)
+        ? Map<String, dynamic>.from(j['match'])
+        : {};
     final bool found = m['found'] == true;
-    final name = m['name'] ?? j['employee']?['name'] ?? j['name'] ?? 'Unknown';
-    final id = m['employee_id'] ?? j['employee']?['id'] ?? j['id'];
-    final score = m['score'] ?? j['score'] ?? j['similarity'];
+
     if (!found) {
-      final lower = name.toString().toLowerCase();
-      if (lower.contains('no match')) return 'No face match found. Please try again';
-      return 'No match ❌';
+      // اعرض رسالة الباك اند مباشرةً (message على أي مستوى)
+      final backendMsg = j['message']?.toString() ??
+          m['message']?.toString() ??
+          m['name']?.toString();
+      if (backendMsg != null && backendMsg.isNotEmpty) return backendMsg;
+      return 'No match';
     }
+
+    // ── نجاح: عرض اسم الموظف ──
+    final name = m['name'] ?? j['employee']?['name'] ?? j['name'] ?? 'Unknown';
+    final id   = m['employee_id'] ?? j['employee']?['id'] ?? j['id'];
     final parts = <String>['$name'];
     if (id != null) parts.add('#$id');
-    if (score != null) parts.add('score: $score');
-    return '✅ ${parts.join('  •  ')}';
+    return '${parts.join('  •  ')}';
   }
 
   @override
@@ -431,9 +485,9 @@ class AttendanceBanner extends StatelessWidget {
     final status = j['status'];
     final message = j['message'] ?? '';
     if (status == 'ok') {
-      return '✅ Attendance recorded\n$message';
+      return 'Attendance recorded\n$message';
     }
-    return '❌ Attendance failed\n$message';
+    return 'Attendance failed\n$message';
   }
 
   @override
@@ -458,12 +512,14 @@ class AttendanceBanner extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  isOk ? Icons.how_to_reg_rounded : Icons.cancel_rounded,
-                  color: isOk ? const Color(0xff0fd86e) : const Color(0xffff4d67),
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
+                if (isOk) ...[
+                  const Icon(
+                    Icons.how_to_reg_rounded,
+                    color: Color(0xff0fd86e),
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 Flexible(
                   child: Text(
                     _text(json),

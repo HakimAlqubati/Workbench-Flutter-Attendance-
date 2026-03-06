@@ -149,6 +149,10 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
   bool _waiting = false;
   bool get waiting => _waiting;
 
+  /// true = انتهت العمليات ، ونحن في فترة عرض النتيجة فقط
+  bool _processingDone = false;
+  bool get processingDone => _processingDone;
+
   int _captureSeq = 0;        // token متزايد لكل لقطة
   int? _activeCaptureSeq;     // token الحالي قيد الانتظار
 
@@ -271,7 +275,11 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     if (_showScreensaver) return;
     if (_activeCaptureSeq != seq) return;
 
-    await _resumeLivePreview();
+    // ✅ انتهت فترة العرض — الآن فقط نوقف حالة الانتظار ونبدأ عداد السكرين سيفر
+    _waiting = false;
+    notifyListeners();
+
+    await _resumeLivePreview(); // ← يستدعي _resetInactivity() لبدء العداد
   }
 
   // زر التخطي من الواجهة
@@ -371,15 +379,22 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
     _screensaverCountdown = kScreensaverSeconds;
 
     _inactivityTicker = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!_showScreensaver) {
+      // ⏸ يتوقف أثناء: معالجة الصورة (waiting) أو عداد الالتقاط (countdown)
+      if (!_showScreensaver && !_waiting && _countdown == null) {
         if (_screensaverCountdown != null && _screensaverCountdown! > 0) {
           _screensaverCountdown = _screensaverCountdown! - 1;
           notifyListeners();
         }
       }
     });
-
+  
     _inactivityTimer = Timer(Duration(seconds: kScreensaverSeconds), () async {
+      // ⏸ لا تُظهر السكرين سيفر إذا كانت العمليات لم تنته بعد
+      // أو إذا كان عداد الالتقاط لا يزال شغّالاً
+      if (_waiting || _countdown != null) {
+        _resetInactivity(); // أعد الكاونتداون من جديد وانتظر
+        return;
+      }
       _showScreensaver = true;
       _cameraOpen = false;
       notifyListeners();
@@ -889,6 +904,7 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
       _resetInactivity();
 
       _waiting = true;
+      _processingDone = false;  // ← ابدأ المعالجة
       _waitMessage = '';
       notifyListeners();
 
@@ -950,7 +966,8 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
       await _maybeAutoPostAttendance();
 
       if (_activeCaptureSeq == seq) {
-        _waiting = false;
+        // انتهت العمليات → أخفِ السبينر وابدأ عرض النتيجة
+        _processingDone = true;
         notifyListeners();
         await _startDisplayAndResume(seq: seq);
       }
@@ -1414,7 +1431,6 @@ class FaceLivenessController extends ChangeNotifier with WidgetsBindingObserver 
       await _initCamera();   // ✅ أعد فتح الكاميرا الجديدة
       _resetInactivity();
     } catch (e) {
-      debugPrint('❌ toggleCamera error: $e');
     }
   }
 

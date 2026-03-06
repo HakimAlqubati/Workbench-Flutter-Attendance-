@@ -44,6 +44,8 @@ class Screensaver extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      const BatteryIndicator(),
+                      const SizedBox(height: 12),
                       Text(timeStr,
                           style: const TextStyle(
                               color: Colors.white,
@@ -58,11 +60,9 @@ class Screensaver extends StatelessWidget {
                           color: Colors.white,
                           fontWeight: FontWeight.w700,
                           fontSize: 18,
-                          decoration: TextDecoration.none, // 👈 هنا أيضًا
+                          decoration: TextDecoration.none,
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      const BatteryIndicator(),
                     ],
                   ),
                 ),
