@@ -7,7 +7,8 @@ import 'package:my_app/features/face_liveness/widgets/clock_chip.dart';
 class TopHud extends StatelessWidget {
   final FaceLivenessController c;
   final bool hidden;
-  const TopHud({super.key, required this.c, this.hidden = false});
+  final String? branchName;
+  const TopHud({super.key, required this.c, this.hidden = false, this.branchName});
 
   static const _timerIcon = Icon(
     Icons.timer_outlined,
@@ -43,6 +44,37 @@ class TopHud extends StatelessWidget {
 
           const SizedBox(width: 8),
 
+          // المنتصف: اسم الفرع
+          if (branchName != null && branchName!.isNotEmpty)
+            Expanded(
+              child: Center(
+                child: Glass(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  opacity: 0.08,
+                  blur: 4,
+                  radius: 10,
+                  border: true,
+                  child: Text(
+                    branchName!,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      height: 1.1,
+                      letterSpacing: 0.3,
+                      decoration: TextDecoration.none,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+          const SizedBox(width: 8),
+
           // يمين: الساعة دائمًا — معزولة لتقليل إعادة الطلاء
           RepaintBoundary(
             child: ConstrainedBox(
@@ -53,7 +85,6 @@ class TopHud extends StatelessWidget {
               ),
             ),
           ),
-
         ],
       ),
     );

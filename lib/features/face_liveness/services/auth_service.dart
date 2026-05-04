@@ -12,23 +12,40 @@ class AuthSession {
   final int id;
   final String name;
   final String email;
+  final String branchName;
 
-  AuthSession({required this.token, required this.id, required this.name, required this.email});
+  AuthSession({
+    required this.token,
+    required this.id,
+    required this.name,
+    required this.email,
+    required this.branchName,
+  });
 
   Map<String, dynamic> toJson() => {
     'token': token,
     'id': id,
     'name': name,
     'email': email,
+    'branch_name': branchName,
   };
 
   static AuthSession? fromPrefs(SharedPreferences p) {
     final token = p.getString('auth_token');
     final name  = p.getString('auth_name');
     final email = p.getString('auth_email');
-    final id    = p.getInt('auth_id');
-    if (token == null || name == null || email == null || id == null) return null;
-    return AuthSession(token: token, id: id, name: name, email: email);
+    final id = p.getInt('auth_id');
+    final branchName = p.getString('auth_branch_name') ?? '';
+    if (token == null || name == null || email == null || id == null) {
+      return null;
+    }
+    return AuthSession(
+      token: token,
+      id: id,
+      name: name,
+      email: email,
+      branchName: branchName,
+    );
   }
 }
 
@@ -64,6 +81,8 @@ class AuthService {
       id: (user['id'] as num).toInt(),
       name: user['name']?.toString() ?? '',
       email: user['email']?.toString() ?? '',
+      branchName:
+          (user['branch'] as Map<String, dynamic>?)?['name']?.toString() ?? '',
     );
 
     await _saveSession(session);
@@ -76,6 +95,7 @@ class AuthService {
     await p.setInt('auth_id', s.id);
     await p.setString('auth_name', s.name);
     await p.setString('auth_email', s.email);
+    await p.setString('auth_branch_name', s.branchName);
   }
 
   Future<AuthSession?> getSavedSession() async {
@@ -89,6 +109,7 @@ class AuthService {
     await p.remove('auth_id');
     await p.remove('auth_name');
     await p.remove('auth_email');
+    await p.remove('auth_branch_name');
   }
 
   /// هيدر جاهز للطلبات المحمية مستقبلاً

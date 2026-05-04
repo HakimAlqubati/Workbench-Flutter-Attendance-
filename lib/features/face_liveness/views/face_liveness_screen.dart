@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:my_app/features/face_liveness/constants.dart';
@@ -7,6 +6,7 @@ import 'package:my_app/features/face_liveness/widgets/top_hud.dart';
 import 'package:my_app/features/attendance/attendance_service.dart';
 import 'package:my_app/features/face_liveness/widgets/camera_ui.dart';
 import 'package:my_app/features/face_liveness/widgets/screensaver.dart';
+import 'package:my_app/features/face_liveness/services/auth_service.dart';
 
 class FaceLivenessScreen extends StatefulWidget {
   const FaceLivenessScreen({super.key});
@@ -18,11 +18,12 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
     with TickerProviderStateMixin {
   late final FaceLivenessController c;
   late final AnimationController glowCtrl;
+  String? _branchName;
 
   @override
   void initState() {
     super.initState();
-
+    _loadBranch();
 
     c = FaceLivenessController()..init();
 
@@ -33,7 +34,9 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
         barrierDismissible: false,
         builder: (_) => AlertDialog(
           title: const Text('Sorry'),
-          content: const Text('Liveness check failed. Please ensure your real face is visible and try again.'),
+          content: const Text(
+            'Liveness check incomplete. Please ensure your real face is visible and try again.',
+          ),
           actions: [
             TextButton(
               onPressed: () {
@@ -52,18 +55,35 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
       if (!mounted) return Future.value(null);
       return askTypeModal(context);
     };
+    c.onShiftConflict = (options) {
+      if (!mounted) return Future.value(null);
+      return askConflictModal(context, options);
+    };
     AttendanceService.onRequireType = c.onRequireType;
 
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      systemNavigationBarColor: Colors.black,
-      statusBarIconBrightness: Brightness.light,
-      systemNavigationBarIconBrightness: Brightness.light,
-    ));
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Colors.black,
+        statusBarIconBrightness: Brightness.light,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+    );
 
-    glowCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 2))
-      ..repeat(reverse: true);
+    glowCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+  }
+
+  Future<void> _loadBranch() async {
+    final session = await AuthService().getSavedSession();
+    if (mounted) {
+      setState(() {
+        _branchName = session?.branchName;
+      });
+    }
   }
 
   @override
@@ -127,18 +147,20 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
               ),
 
               // شريط علوي: عداد السكون (يسار) + الساعة (يمين)
-              TopHud(c: c,hidden: c.showScreensaver),
+              TopHud(c: c, hidden: c.showScreensaver, branchName: _branchName),
 
               // ============================
               // ✅ زر تبديل الكاميرا (أعلى المنتصف)
               // ============================
               if (kShowSwitchCameraButton &&
-                  !c.showScreensaver &&           // لا تعرضه أثناء شاشة الـ Screensaver
-                  c.cameraOpen &&                 // المعاينة شغّالة
-                  c.capturedFile == null &&      // ليس بعد الالتقاط
-                  !c.waiting)                    // ليس أثناء انتظار نتائج الشبكة
+                  !c.showScreensaver && // لا تعرضه أثناء شاشة الـ Screensaver
+                  c.cameraOpen && // المعاينة شغّالة
+                  c.capturedFile == null && // ليس بعد الالتقاط
+                  !c.waiting) // ليس أثناء انتظار نتائج الشبكة
                 Positioned(
-                  top: MediaQuery.of(context).padding.top + 8, // SafeArea + مسافة بسيطة
+                  top:
+                      MediaQuery.of(context).padding.top +
+                      8, // SafeArea + مسافة بسيطة
                   left: 0,
                   right: 0,
                   child: Center(
@@ -147,10 +169,14 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
                       child: InkWell(
                         borderRadius: BorderRadius.circular(22),
                         onTap: () async {
-                          await c.toggleCamera(); // ← استدعِ الدالة في الـ controller
+                          await c
+                              .toggleCamera(); // ← استدعِ الدالة في الـ controller
                         },
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0x66000000), // خلفية نصف شفافة
                             borderRadius: BorderRadius.circular(20),
@@ -158,7 +184,11 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.cameraswitch_rounded, color: Colors.white, size: 18),
+                              const Icon(
+                                Icons.cameraswitch_rounded,
+                                color: Colors.white,
+                                size: 18,
+                              ),
                               const SizedBox(width: 6),
                               Text(
                                 c.isFrontCamera ? 'Front' : 'Back',

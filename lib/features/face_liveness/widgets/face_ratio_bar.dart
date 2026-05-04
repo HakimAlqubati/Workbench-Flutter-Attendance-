@@ -16,7 +16,6 @@ class FaceRatioBar extends StatelessWidget {
     required this.brightnessText,
     required this.brightnessValue,
     this.showProgressBar = false, // افتراضي يظهر
-
   });
 
   // دالة مساعدة لتحديد الحالة بناءً على النص
@@ -38,87 +37,99 @@ class FaceRatioBar extends StatelessWidget {
     return Positioned(
       left: 16,
       right: 16,
-      bottom: MediaQuery.of(context).padding.bottom + 20,
+      bottom: MediaQuery.of(context).padding.bottom + 10, // Moved lower
       child: Align(
         alignment: Alignment.bottomCenter,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
           child: Glass(
-            blur: 12,
+            blur: 8, // Reduced blur
             opacity: .14,
             border: true,
-            radius: 14,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            radius: 10, // Reduced radius
+            padding: const EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 8,
+            ), // Reduced padding
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if(showProgressBar)...[
-                // العنوان ونسبة Face fit
-                Row(
-                  children: [
-                    const Text(
-                      'Face Fit',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                        decoration: TextDecoration.none,
-                      ),
-                    ),
-                    const Spacer(),
-                    // عداد النسبة المئوية المتحرك
-                    TweenAnimationBuilder<double>(
-                      tween: Tween(begin: 0.0, end: clampedProgress),
-                      duration: const Duration(milliseconds: 400),
-                      builder: (context, value, child) {
-                        return Text(
-                          '${(value * 100).round()}%',
-                          style: const TextStyle(
-                            fontFeatures: [FontFeature.tabularFigures()],
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                            decoration: TextDecoration.none,
-                            fontSize: 12.5,
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-
-
-                const SizedBox(height: 8),
-
-                // شريط Face fit أصبح متحركاً
-                LayoutBuilder(builder: (context, constraints) {
-                  return Container(
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: const Color(0xff1b1b1b).withOpacity(.65),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: const Color(0xff444444).withOpacity(.5)),
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 350),
-                        curve: Curves.easeOut,
-                        width: constraints.maxWidth * clampedProgress,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.centerLeft,
-                            end: Alignment.centerRight,
-                            colors: clampedProgress > 0.9
-                                ? [const Color(0xFF388E3C), const Color(0xFF66BB6A)] // أخضر
-                                : [const Color(0xFF4FC3F7), const Color(0xFF3F51B5)], // أزرق
-                          ),
-                          borderRadius: BorderRadius.circular(999),
+                if (showProgressBar) ...[
+                  // العنوان ونسبة Face fit
+                  Row(
+                    children: [
+                      const Text(
+                        'Face Fit',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          decoration: TextDecoration.none,
                         ),
                       ),
-                    ),
-                  );
-                }),
+                      const Spacer(),
+                      // عداد النسبة المئوية المتحرك
+                      TweenAnimationBuilder<double>(
+                        tween: Tween(begin: 0.0, end: clampedProgress),
+                        duration: const Duration(milliseconds: 400),
+                        builder: (context, value, child) {
+                          return Text(
+                            '${(value * 100).round()}%',
+                            style: const TextStyle(
+                              fontFeatures: [FontFeature.tabularFigures()],
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                              decoration: TextDecoration.none,
+                              fontSize: 12.5,
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // شريط Face fit أصبح متحركاً
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      return Container(
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: const Color(0xff1b1b1b).withOpacity(.65),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: const Color(0xff444444).withOpacity(.5),
+                          ),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 350),
+                            curve: Curves.easeOut,
+                            width: constraints.maxWidth * clampedProgress,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.centerLeft,
+                                end: Alignment.centerRight,
+                                colors: clampedProgress > 0.9
+                                    ? [
+                                        const Color(0xFF388E3C),
+                                        const Color(0xFF66BB6A),
+                                      ] // أخضر
+                                    : [
+                                        const Color(0xFF4FC3F7),
+                                        const Color(0xFF3F51B5),
+                                      ], // أزرق
+                              ),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ],
                 const SizedBox(height: 8),
 
@@ -172,27 +183,27 @@ class _EnhancedBrightnessChip extends StatelessWidget {
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 8,
+        vertical: 4,
+      ), // Reduced from 10, 6
       decoration: BoxDecoration(
         color: color.withOpacity(0.25),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: color.withOpacity(0.7),
-          width: 1.2,
-        ),
+        border: Border.all(color: color.withOpacity(0.7), width: 1.2),
       ),
       child: Row(
         // *** التعديل الثاني هنا ***
         // لجعل المحتوى (الأيقونة والنص) في المنتصف
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(iconData, color: Colors.white, size: 14),
+          Icon(iconData, color: Colors.white, size: 12), // Reduced from 14
           const SizedBox(width: 6),
           Text(
             text,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 12.5,
+              fontSize: 11.0, // Reduced from 12.5
               decoration: TextDecoration.none,
               fontWeight: FontWeight.w700,
             ),

@@ -3,14 +3,15 @@ import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
- import 'package:my_app/features/face_liveness/services/auth_service.dart';
+import 'package:my_app/features/face_liveness/services/auth_service.dart';
 import '../constants.dart';
 
 class LivenessNetworkService {
   HttpClient _newHttpClient() {
     final client = HttpClient();
     if (kAllowInsecureHttps) {
-      client.badCertificateCallback = (X509Certificate cert, String host, int port) => true;
+      client.badCertificateCallback =
+          (X509Certificate cert, String host, int port) => true;
     }
     return client;
   }
@@ -25,7 +26,9 @@ class LivenessNetworkService {
       debugPrint('➡️ Request: ${req.method} $uri');
       debugPrint('Headers: ${req.headers}');
       for (var f in req.files) {
-        debugPrint('File: field=${f.field}, filename=${f.filename}, length=${f.length}');
+        debugPrint(
+          'File: field=${f.field}, filename=${f.filename}, length=${f.length}',
+        );
       }
 
       final streamed = await io.send(req).timeout(const Duration(seconds: 12));
@@ -63,7 +66,6 @@ class LivenessNetworkService {
       debugPrint('❌ Unauthorized (token invalid or expired)');
       return {'error': 'unauthorized', 'status': 401};
     }
-
     if (res.body.isEmpty) return null;
     return jsonDecode(res.body) as Map<String, dynamic>;
   }

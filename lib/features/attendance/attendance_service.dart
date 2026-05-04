@@ -8,43 +8,18 @@ class ApiResult {
   final bool ok;
   final String message;
   final bool needType; // ✅ جديد
+  final String? checkType; // ✅ "checkin" or "checkout"
+  final bool shiftConflictDetected;
+  final List<dynamic>? conflictOptions;
+
   ApiResult({
     required this.ok,
     required this.message,
+    this.checkType,
     this.needType = false,
+    this.shiftConflictDetected = false,
+    this.conflictOptions,
   });
-
-  // factory ApiResult.fromJson(Map<String, dynamic> j) {
-  //   final ok = (j['status'] == true) || (j['success'] == true);
-  //
-  //   // نحافظ على الرسالة الأصلية للعرض
-  //   final messageOriginal = (j['message'] ?? '').toString().trim();
-  //
-  //   // نستخدم نسخة lower فقط للفحص عن needType
-  //   final msgLower = messageOriginal.toLowerCase();
-  //
-  //   final needType = msgLower.contains('please specify type');
-  //
-  //   return ApiResult(
-  //     ok: ok,
-  //     needType: needType,
-  //     message: messageOriginal, // نعرض الأصلية
-  //   );
-  // }
-
-}
-
-
-bool _needsType(http.Response res) {
-  try {
-    final json = jsonDecode(res.body);
-    final typeRequired = json['type_required'] == true;
-    debugPrint('zzz type_required => $typeRequired');
-    return typeRequired;
-  } catch (e) {
-    debugPrint('needsType parse error: $e');
-    return false;
-  }
 }
 
 
@@ -93,12 +68,13 @@ class AttendanceService {
     required String dateTime, // "YYYY-MM-DD HH:mm:ss"
     Map<String, String>? headers,
     String? type,
+    int? periodId,
   }) async {
     return _postAttendance(body: {
       "employee_id": employeeId,
       "date_time": dateTime,
       if (type != null) 'type': type,
-
+      if (periodId != null) 'period_id': periodId,
     }, headers: headers);
   }
 
@@ -145,22 +121,43 @@ class AttendanceService {
       return body;
     }
 
-    // ✅ لو السيرفر يطلب type: رجّع needType=true
-    if (_needsType(res)) {
-      final msg = extractMsg(raw).isNotEmpty ? extractMsg(raw) : "please specify type";
-      return ApiResult(ok: false, message: msg, needType: true);
-    }
+    try {
+      final d = jsonDecode(raw);
+      if (d is Map<String, dynamic>) {
+        if (d['shift_conflict_detected'] == true) {
+          final msg = extractMsg(raw).isNotEmpty ? extractMsg(raw) : "Shift conflict detected";
+          return ApiResult(
+            ok: false, 
+            message: msg, 
+            shiftConflictDetected: true, 
+            conflictOptions: d['conflict_options'] as List<dynamic>?
+          );
+        }
+        if (d['type_required'] == true) {
+          final msg = extractMsg(raw).isNotEmpty ? extractMsg(raw) : "please specify type";
+          return ApiResult(ok: false, message: msg, needType: true);
+        }
+      }
+    } catch (_) {}
 
     if (res.statusCode >= 200 && res.statusCode < 300) {
       try {
         final data = jsonDecode(raw);
         if (data is Map<String, dynamic>) {
-          final status =   data["status"] == true ;
-          debugPrint('row ${raw}');
-          debugPrint(raw);
-          var rowDecoded = jsonDecode(raw);
-          var msg = rowDecoded['message'];
-          return ApiResult(ok: status, message: msg);
+          final status = data["status"] == true || data["success"] == true;
+          final msg = data['message']?.toString() ?? "OK";
+          
+          // استخراج نوع العملية من الحقل data.check_type
+          String? checkType;
+          if (data['data'] is Map) {
+            checkType = data['data']['check_type']?.toString();
+          }
+
+          return ApiResult(
+            ok: status, 
+            message: msg,
+            checkType: checkType,
+          );
         }
         return ApiResult(ok: true, message: "OK");
       } catch (_) {
