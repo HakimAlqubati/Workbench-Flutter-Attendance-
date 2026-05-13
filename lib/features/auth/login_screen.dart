@@ -40,7 +40,8 @@ class _LoginScreenState extends State<LoginScreen> {
     _getDeviceId();
     // فقط أثناء التطوير، املأ الحقول افتراضيًا
     assert(() {
-      _emailCtrl.text = 'staff@admin.com';
+      // _emailCtrl.text = 'staff@admin.com';
+      _emailCtrl.text = 'yahalattdi@att.com';
       _passCtrl.text = '123456';
       return true;
     }());
@@ -72,7 +73,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
     if (mounted) setState(() {});
   }
-
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;

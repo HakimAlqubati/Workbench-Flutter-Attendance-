@@ -13,7 +13,7 @@ class FrameMaskPainter extends CustomPainter {
   final bool inside;
   final Color activeColor;
   final Color inactiveColor;
-  final double glow;            // 0..1
+  final double glow; // 0..1
   final double strokeWidth;
   final Color dimColor;
 
@@ -32,21 +32,21 @@ class FrameMaskPainter extends CustomPainter {
     final full = Offset.zero & size;
 
     // ===== حساب البيضاوي وفق ثوابت التصميم =====
-    final cx = size.width  * (0.5 + kOvalCxOffsetPct);
+    final cx = size.width * (0.5 + kOvalCxOffsetPct);
     final cy = size.height * (0.5 + kOvalCyOffsetPct);
-    final rx = size.width  * kOvalRxPct;
+    final rx = size.width * kOvalRxPct;
     final ry = size.height * kOvalRyPct;
 
     final ovalRect = Rect.fromCenter(
       center: Offset(cx, cy),
-      width:  rx * 2,
+      width: rx * 2,
       height: ry * 2,
     );
 
     // ===== قناع تغميق خارج البيضاوي (نافذة مقصوصة) =====
     final overlay = Path()..addRect(full);
-    final window  = Path()..addOval(ovalRect);
-    final mask    = Path.combine(PathOperation.difference, overlay, window);
+    final window = Path()..addOval(ovalRect);
+    final mask = Path.combine(PathOperation.difference, overlay, window);
 
     final dimPaint = Paint()..color = dimColor;
     canvas.drawPath(mask, dimPaint);
@@ -58,13 +58,18 @@ class FrameMaskPainter extends CustomPainter {
     // نستخدم BlurStyle.outer لعمل هالة ناعمة خارج الحد.
     // نضبط الشدة والسُمك حسب glow (0..1) للحصول على نبضات لطيفة.
     final double sigma = ui.lerpDouble(6.0, 14.0, glow.clamp(0.0, 1.0))!;
-    final double glowStroke = ui.lerpDouble(strokeWidth * 1.6, strokeWidth * 2.2, glow)!;
+    final double glowStroke = ui.lerpDouble(
+      strokeWidth * 1.6,
+      strokeWidth * 2.2,
+      glow,
+    )!;
 
     final Paint glowPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = glowStroke
       ..color = edgeColor.withOpacity(ui.lerpDouble(0.28, 0.55, glow)!)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.outer, 0) // placeholder
+      ..maskFilter =
+          const MaskFilter.blur(BlurStyle.outer, 0) // placeholder
       ..isAntiAlias = true;
 
     // ملاحظة: بعض المحرّرات تحتاج sigma عبر MaskFilter.blur مباشرة:
@@ -97,7 +102,11 @@ class FrameMaskPainter extends CustomPainter {
     // ===== لمسة لمعان subtle highlight (اختياري لطيفة) =====
     // خط نصف دائري علوي شفاف يعطي إحساس لمعان خفيف (specular).
     final Path highlight = Path()
-      ..addArc(ovalRect.deflate(strokeWidth * 0.8), math.pi * 1.05, math.pi * 0.9);
+      ..addArc(
+        ovalRect.deflate(strokeWidth * 0.8),
+        math.pi * 1.05,
+        math.pi * 0.9,
+      );
     final Paint highlightPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth * 0.9
@@ -109,11 +118,11 @@ class FrameMaskPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant FrameMaskPainter old) {
-    return inside       != old.inside ||
-        glow         != old.glow ||
-        strokeWidth  != old.strokeWidth ||
-        dimColor     != old.dimColor ||
-        activeColor  != old.activeColor ||
-        inactiveColor!= old.inactiveColor;
+    return inside != old.inside ||
+        glow != old.glow ||
+        strokeWidth != old.strokeWidth ||
+        dimColor != old.dimColor ||
+        activeColor != old.activeColor ||
+        inactiveColor != old.inactiveColor;
   }
 }

@@ -428,13 +428,13 @@ class CameraUI extends StatelessWidget {
                 builder: (context) {
                   final checkType = c.attendanceResult!['check_type'];
                   String? asset;
-                  if (checkType == 'checkin') asset = 'assets/icon/enter.png';
-                  if (checkType == 'checkout') asset = 'assets/icon/exit.png';
+                  if (checkType == 'checkin') asset = 'assets/icon/in.png';
+                  if (checkType == 'checkout') asset = 'assets/icon/out.png';
 
                   if (asset == null) return const SizedBox.shrink();
 
                   return Container(
-                    width: 180, // تم تكبير العرض كما طلبت
+                    width: 150, // تم تكبير العرض كما طلبت
                     height: 80,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(16.0),
@@ -577,6 +577,26 @@ class CameraUI extends StatelessWidget {
 
                       label: Text(label),
                     ),
+                    if (c.appVersion.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        'Version ${c.appVersion}',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.5,
+                          decoration: TextDecoration.none,
+                          shadows: [
+                            Shadow(
+                              color: Colors.black.withOpacity(0.3),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 );
               },
@@ -640,10 +660,16 @@ class _RecognitionBanner extends StatelessWidget {
 
     // ── نجاح: عرض اسم الموظف ──
     final name = m['name'] ?? j['employee']?['name'] ?? j['name'] ?? 'Unknown';
-    final id = m['employee_id'] ?? j['employee']?['id'] ?? j['id'];
+    final empNo =
+        m['employee_data']?['employee_no'] ??
+        m['employee_no'] ??
+        m['employee_id'] ??
+        j['employee']?['id'] ??
+        j['id'];
+
     final parts = <String>['$name'];
-    if (id != null) parts.add('#$id');
-    return '${parts.join('  •  ')}';
+    if (empNo != null) parts.add('#$empNo');
+    return '${parts.join(' • ')}';
   }
 
   @override

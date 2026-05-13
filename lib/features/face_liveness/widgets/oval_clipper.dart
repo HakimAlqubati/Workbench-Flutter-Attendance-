@@ -15,7 +15,11 @@ class OvalClipper extends CustomClipper<Path> {
     final rx = w * kOvalRxPct;
     final ry = h * kOvalRyPct;
 
-    final rect = Rect.fromCenter(center: Offset(cx, cy), width: rx * 2, height: ry * 2);
+    final rect = Rect.fromCenter(
+      center: Offset(cx, cy),
+      width: rx * 2,
+      height: ry * 2,
+    );
     return Path()..addOval(rect);
   }
 

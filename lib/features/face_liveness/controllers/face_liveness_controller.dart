@@ -13,6 +13,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:my_app/core/network_helper.dart';
 import 'package:my_app/features/attendance/attendance_service.dart';
 
@@ -181,6 +182,9 @@ class FaceLivenessController extends ChangeNotifier
   Size _screenSize = Size.zero;
   set screenSize(Size s) => _screenSize = s;
 
+  String _appVersion = '';
+  String get appVersion => _appVersion;
+
   // ==== إعدادات الحجم ====
   final FaceSizeThresholds _sizeCfg;
   FaceLivenessController({FaceSizeThresholds? sizeCfg})
@@ -244,7 +248,18 @@ class FaceLivenessController extends ChangeNotifier
         notifyListeners();
       }
     });
+    await _loadAppVersion();
     await _initCamera();
+  }
+
+  Future<void> _loadAppVersion() async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      _appVersion = packageInfo.version;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error loading app version: $e');
+    }
   }
 
   Future<void> disposeAll() async {
