@@ -36,12 +36,13 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
-
+    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     _getDeviceId();
     // فقط أثناء التطوير، املأ الحقول افتراضيًا
     assert(() {
       // _emailCtrl.text = 'staff@admin.com';
-      _emailCtrl.text = 'yahalattdi@att.com';
+      // _emailCtrl.text = 'atthq@gmail.com';
+      _emailCtrl.text = 'hq@att.com';
       _passCtrl.text = '123456';
       return true;
     }());

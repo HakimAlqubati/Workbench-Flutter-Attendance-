@@ -8,7 +8,11 @@ import 'features/settings/settings_store.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
+  ]);
   await WakelockPlus.enable();
   await SettingsStore.I.init();
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);

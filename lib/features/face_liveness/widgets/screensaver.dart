@@ -5,11 +5,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:battery_plus/battery_plus.dart';
-import '../widgets/floating_logo.dart';
 
 class Screensaver extends StatelessWidget {
   final DateTime now;
   final Alignment alignment;
+  final Offset offset;
   final bool blink;
   final VoidCallback onTap;
 
@@ -17,58 +17,111 @@ class Screensaver extends StatelessWidget {
     super.key,
     required this.now,
     required this.alignment,
+    required this.offset,
     required this.blink,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final timeStr = DateFormat.Hms().format(now);
+    // Show hours and minutes (updated once a minute)
+    final timeStr = DateFormat('HH:mm').format(now);
     final dateStr = DateFormat('EEEE, d MMMM yyyy').format(now);
+
+    final size = MediaQuery.of(context).size;
+    final isLandscape = size.width > size.height;
+
+    // Constrain the text container heights based on screen height to avoid overflow.
+    final clockHeight = size.height * (isLandscape ? 0.3 : 0.22);
+    final dateHeight = size.height * (isLandscape ? 0.08 : 0.05);
+
+    // Static Logo (dimmed to save battery, prevent burn-in, and match the date opacity)
+    final logoWidget = Opacity(
+      opacity: 0.20, // Set to match the date brightness (0.20)
+      child: Image.asset(
+        'assets/icon/default-wb.png',
+        width: isLandscape ? size.height * 0.4 : size.width * 0.5,
+        height: isLandscape ? size.height * 0.4 : size.width * 0.5,
+        fit: BoxFit.contain,
+      ),
+    );
 
     return GestureDetector(
       onTap: onTap,
       child: Container(
         color: Colors.black,
-        child: Stack(
-          children: [
-            const FloatingLogo(),
-            Align(
-              alignment: alignment,
-              child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 80),
-                opacity: blink ? 0 : 1,
-                child: Container(
-                  margin: const EdgeInsets.only(top: 60),
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const BatteryIndicator(),
-                      const SizedBox(height: 12),
-                      Text(timeStr,
-                          style: const TextStyle(
-                              color: Colors.white,
-                              decoration: TextDecoration.none,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 56,
-                              shadows: [Shadow(color: Colors.black87, blurRadius: 16, offset: Offset(0, 3))])),
-                      const SizedBox(height: 6),
-                      Text(
-                        dateStr,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 18,
-                          decoration: TextDecoration.none,
+        width: double.infinity,
+        height: double.infinity,
+        child: SafeArea(
+          child: Stack(
+            children: [
+              // Battery Indicator (dimmed to save power)
+              const Positioned(
+                top: 20,
+                right: 20,
+                child: Opacity(
+                  opacity: 0.4, // Adjusted for readability
+                  child: BatteryIndicator(),
+                ),
+              ),
+              
+              // Clock, Date and Logo Area with Pixel Shifting
+              Center(
+                child: Transform.translate(
+                  offset: offset,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        // Time fitted box
+                        SizedBox(
+                          width: double.infinity,
+                          height: clockHeight,
+                          child: FittedBox(
+                            fit: BoxFit.contain,
+                            alignment: Alignment.center,
+                            child: Text(
+                              timeStr,
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.35), // Adjusted for readability in dark environments
+                                fontWeight: FontWeight.w900,
+                                decoration: TextDecoration.none,
+                                fontFamily: 'monospace',
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                    ],
+                        SizedBox(height: isLandscape ? 4 : 12),
+                        // Date fitted box
+                        SizedBox(
+                          width: double.infinity,
+                          height: dateHeight,
+                          child: FittedBox(
+                            fit: BoxFit.contain,
+                            alignment: Alignment.center,
+                            child: Text(
+                              dateStr,
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.20), // Adjusted for readability
+                                fontWeight: FontWeight.w700,
+                                decoration: TextDecoration.none,
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: isLandscape ? 16 : 32),
+                        // Logo below Time and Date
+                        logoWidget,
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

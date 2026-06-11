@@ -18,28 +18,49 @@ class LivenessBanner extends StatelessWidget {
     else        { icon = Icons.warning_amber_rounded;   color = const Color(0xffffb74d); }
 
     final size = MediaQuery.of(context).size;
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+
     return Positioned(
-      top: size.height * 0.12, left: 16, right: 16,
+      top: size.height * (isLandscape ? 0.05 : 0.12),
+      left: 16,
+      right: 16,
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 520),
           child: Glass(
-            blur: 14, opacity: .18, radius: 16, border: true,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(icon, color: color, size: 22),
-              const SizedBox(width: 8),
-              Flexible(child: Text(
-                _text(json),
-                softWrap: true, overflow: TextOverflow.fade,
-                style: TextStyle(
-                  color: ok ? const Color(0xffd9ffe9)
-                      : (isNoMatch ? const Color(0xffffe2e8) : const Color(0xfffff3e0)),
-                  fontWeight: FontWeight.w800, fontSize: 14.5, letterSpacing: .2,
-                  decoration: TextDecoration.none,
+            blur: 14,
+            opacity: .18,
+            radius: isLandscape ? 10 : 16,
+            border: true,
+            padding: EdgeInsets.symmetric(
+              horizontal: isLandscape ? 10 : 16,
+              vertical: isLandscape ? 6 : 12,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, color: color, size: isLandscape ? 16 : 22),
+                SizedBox(width: isLandscape ? 4 : 8),
+                Flexible(
+                  child: Text(
+                    _text(json),
+                    softWrap: true,
+                    overflow: TextOverflow.fade,
+                    style: TextStyle(
+                      color: ok
+                          ? const Color(0xffd9ffe9)
+                          : (isNoMatch
+                              ? const Color(0xffffe2e8)
+                              : const Color(0xfffff3e0)),
+                      fontWeight: FontWeight.w800,
+                      fontSize: isLandscape ? 12 : 14.5,
+                      letterSpacing: .2,
+                      decoration: TextDecoration.none,
+                    ),
+                  ),
                 ),
-              )),
-            ]),
+              ],
+            ),
           ),
         ),
       ),

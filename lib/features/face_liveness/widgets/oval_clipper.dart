@@ -10,10 +10,14 @@ class OvalClipper extends CustomClipper<Path> {
     final w = screenSize.width;
     final h = screenSize.height;
 
+    final isLandscape = w > h;
+    final shortSide = isLandscape ? h : w;
+    final longSide = isLandscape ? w : h;
+
     final cx = w * (0.5 + kOvalCxOffsetPct);
     final cy = h * (0.5 + kOvalCyOffsetPct);
-    final rx = w * kOvalRxPct;
-    final ry = h * kOvalRyPct;
+    final rx = (isLandscape ? shortSide : w) * kOvalRxPct;
+    final ry = (isLandscape ? longSide : h) * kOvalRyPct;
 
     final rect = Rect.fromCenter(
       center: Offset(cx, cy),

@@ -32,10 +32,17 @@ class FrameMaskPainter extends CustomPainter {
     final full = Offset.zero & size;
 
     // ===== حساب البيضاوي وفق ثوابت التصميم =====
+    // نستخدم البعد الأصغر والأكبر لضمان بقاء الشكل البيضاوي طولياً حتى في الوضع العرضي
+    final isLandscape = size.width > size.height;
+    final shortSide = isLandscape ? size.height : size.width;
+    final longSide = isLandscape ? size.width : size.height;
+
     final cx = size.width * (0.5 + kOvalCxOffsetPct);
     final cy = size.height * (0.5 + kOvalCyOffsetPct);
-    final rx = size.width * kOvalRxPct;
-    final ry = size.height * kOvalRyPct;
+
+    // في الوضع العرضي، نتبادل النسب لضمان بقاء الشكل عمودياً
+    final rx = (isLandscape ? shortSide : size.width) * kOvalRxPct;
+    final ry = (isLandscape ? longSide : size.height) * kOvalRyPct;
 
     final ovalRect = Rect.fromCenter(
       center: Offset(cx, cy),

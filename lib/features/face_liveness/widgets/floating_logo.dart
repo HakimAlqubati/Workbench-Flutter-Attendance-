@@ -41,7 +41,10 @@ class _FloatingLogoState extends State<FloatingLogo> with SingleTickerProviderSt
               child: Center(
                 child: Image.asset(
                   'assets/icon/default-wb.png',
-                  width: math.min(size.width * .6, 420),
+                  width: math.min(
+                    size.width * (size.width > size.height ? 0.35 : 0.6), 
+                    size.width > size.height ? 250 : 420
+                  ),
                   filterQuality: FilterQuality.high,
                 ),
               ),

@@ -23,6 +23,13 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
   @override
   void initState() {
     super.initState();
+    // السماح بجميع الاتجاهات لهذه الصفحة
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+
     _loadBranch();
 
     c = FaceLivenessController()..init();
@@ -35,7 +42,7 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
         builder: (_) => AlertDialog(
           title: const Text('Sorry'),
           content: const Text(
-            'Liveness check incomplete. Please ensure your real face is visible and try again.',
+            'Liveness check incomplete. Please ensure your real face is visible and try aga',
           ),
           actions: [
             TextButton(
@@ -88,6 +95,9 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
 
   @override
   void dispose() {
+    // إعادة ضبط الاتجاه إلى الطولي فقط عند الخروج (إذا كان هذا هو الافتراضي لتطبيقك)
+    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+
     glowCtrl.dispose();
     c.disposeAll();
     super.dispose();
@@ -102,109 +112,134 @@ class _FaceLivenessScreenState extends State<FaceLivenessScreen>
 
         const bg = BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topCenter,
+            begin: Alignment.topLeft, // تم التعديل ليتناسب مع كلا الوضعين
             end: Alignment.bottomRight,
             colors: [Color(0xFF0B1020), Color(0xFF0A1B26), Color(0xFF091C1B)],
           ),
         );
 
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: c.userActivity,
-          onPanDown: (_) => c.userActivity(),
-          onPanUpdate: (_) => c.userActivity(),
-          child: Stack(
-            children: [
-              const Positioned.fill(child: DecoratedBox(decoration: bg)),
+        return Scaffold(
+          backgroundColor: Colors.black,
+          body: OrientationBuilder(
+            builder: (context, orientation) {
+              final isLandscape = orientation == Orientation.landscape;
 
-              if (c.showScreensaver)
-                Screensaver(
-                  now: c.now,
-                  alignment: Alignment.topCenter,
-                  blink: c.clockBlink,
-                  onTap: () async => c.exitScreensaverAndReopen(),
-                )
-              else
-                CameraUI(c: c, glowCtrl: glowCtrl),
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: c.userActivity,
+                onPanDown: (_) => c.userActivity(),
+                onPanUpdate: (_) => c.userActivity(),
+                child: Stack(
+                  children: [
+                    const Positioned.fill(child: DecoratedBox(decoration: bg)),
 
-              // طبقة إضاءة خفيفة
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: RadialGradient(
-                        center: Alignment.topCenter,
-                        radius: 1.2,
-                        colors: [
-                          Colors.white.withOpacity(0.03),
-                          Colors.transparent,
-                          Colors.white.withOpacity(0.00),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+                    if (c.showScreensaver)
+                      Screensaver(
+                        now: c.now,
+                        alignment: Alignment.center,
+                        offset: c.screensaverOffset,
+                        blink: c.clockBlink,
+                        onTap: () async => c.exitScreensaverAndReopen(),
+                      )
+                    else
+                      CameraUI(c: c, glowCtrl: glowCtrl),
 
-              // شريط علوي: عداد السكون (يسار) + الساعة (يمين)
-              TopHud(c: c, hidden: c.showScreensaver, branchName: _branchName),
-
-              // ============================
-              // ✅ زر تبديل الكاميرا (أعلى المنتصف)
-              // ============================
-              if (kShowSwitchCameraButton &&
-                  !c.showScreensaver && // لا تعرضه أثناء شاشة الـ Screensaver
-                  c.cameraOpen && // المعاينة شغّالة
-                  c.capturedFile == null && // ليس بعد الالتقاط
-                  !c.waiting) // ليس أثناء انتظار نتائج الشبكة
-                Positioned(
-                  top:
-                      MediaQuery.of(context).padding.top +
-                      8, // SafeArea + مسافة بسيطة
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(22),
-                        onTap: () async {
-                          await c
-                              .toggleCamera(); // ← استدعِ الدالة في الـ controller
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0x66000000), // خلفية نصف شفافة
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.cameraswitch_rounded,
-                                color: Colors.white,
-                                size: 18,
+                    // طبقة إضاءة خفيفة (تُخفى أثناء السكرين سيفر لتكون الشاشة سوداء تماماً)
+                    if (!c.showScreensaver)
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: RadialGradient(
+                                center: isLandscape
+                                    ? Alignment.center
+                                    : Alignment
+                                          .topCenter, // توسيط الإضاءة في العرضي
+                                radius: 1.2,
+                                colors: [
+                                  Colors.white.withOpacity(0.03),
+                                  Colors.transparent,
+                                  Colors.white.withOpacity(0.00),
+                                ],
                               ),
-                              const SizedBox(width: 6),
-                              Text(
-                                c.isFrontCamera ? 'Front' : 'Back',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
                         ),
                       ),
+
+                    // تغليف العناصر العلوية بـ SafeArea لتجنب الـ Notch في الوضع العرضي
+                    SafeArea(
+                      child: Stack(
+                        children: [
+                          // شريط علوي: عداد السكون (يسار) + الساعة (يمين)
+                          TopHud(
+                            c: c,
+                            hidden: c.showScreensaver,
+                            branchName: _branchName,
+                          ),
+
+                          // ============================
+                          // ✅ زر تبديل الكاميرا (أعلى المنتصف)
+                          // ============================
+                          if (kShowSwitchCameraButton &&
+                              !c.showScreensaver && // لا تعرضه أثناء شاشة الـ Screensaver
+                              c.cameraOpen && // المعاينة شغّالة
+                              c.capturedFile == null && // ليس بعد الالتقاط
+                              !c.waiting) // ليس أثناء انتظار نتائج الشبكة
+                            Align(
+                              // في الوضع العرضي نضعه في أعلى المنتصف أيضاً، ولكن الـ SafeArea ستحميه
+                              alignment: Alignment.topCenter,
+                              child: Padding(
+                                padding: const EdgeInsets.only(top: 8.0),
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(22),
+                                    onTap: () async {
+                                      await c
+                                          .toggleCamera(); // ← استدعِ الدالة في الـ controller
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 8,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(
+                                          0x66000000,
+                                        ), // خلفية نصف شفافة
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(
+                                            Icons.cameraswitch_rounded,
+                                            color: Colors.white,
+                                            size: 18,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            c.isFrontCamera ? 'Front' : 'Back',
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-            ],
+              );
+            },
           ),
         );
       },

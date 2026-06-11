@@ -293,99 +293,101 @@ class CameraUI extends StatelessWidget {
           )
         // ── Guidance Text & Privacy Banner Container (Dynamically Stacked) ──
         else if (c.cameraOpen && c.capturedFile == null)
-          Positioned(
-            left: 0,
-            right: 0,
-            top:
-                size.height *
-                0.68, // Strictly below the bottom of the oval (0.67)
-            bottom: 90, // Leave room for FaceRatioBar at the bottom
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // 1. Guidance text
-                if (!c.captureEligible)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Text(
-                      _guidanceText(c),
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: size.width * 0.040, // Reduced from 0.045
-                        fontWeight: FontWeight.w600,
-                        color: Colors.amberAccent,
-                        decoration: TextDecoration.none,
-                        shadows: const [
-                          Shadow(
-                            color: Colors.black54,
-                            blurRadius: 8,
-                            offset: Offset(0, 3),
+          Builder(
+            builder: (context) {
+              final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+              
+              return Positioned(
+                left: 0,
+                right: 0,
+                top: size.height * (isLandscape ? 0.72 : 0.68), // ارفعها قليلاً في العرضي لتجنب التداخل
+                bottom: isLandscape ? 40 : 90, // مساحة أقل في العرضي
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // 1. Guidance text
+                    if (!c.captureEligible)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        child: Text(
+                          _guidanceText(c),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: isLandscape ? 14 : size.width * 0.040,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.amberAccent,
+                            decoration: TextDecoration.none,
+                            shadows: const [
+                              Shadow(
+                                color: Colors.black54,
+                                blurRadius: 8,
+                                offset: Offset(0, 3),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ),
 
-                if (!c.captureEligible)
-                  const SizedBox(height: 12), // Dynamic spacing
-                // 2. Privacy warning banner
-                IgnorePointer(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(maxHeight: size.height * 0.21),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.topCenter,
-                      child: Container(
-                        width:
-                            size.width - 20, // Adjusted width (10+10 margins)
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10, // Reduced from 14
-                          vertical: 10, // Reduced from 12
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.72),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Shield icon
-                            Container(
-                              margin: const EdgeInsets.only(
-                                top: 2,
-                                right: 8,
-                              ), // Reduced from 10
-                              child: const Icon(
-                                Icons.verified_user_rounded,
-                                color: Color(0xFFFFD600),
-                                size: 24, // Reduced from 28
-                              ),
+                    if (!c.captureEligible)
+                      SizedBox(height: isLandscape ? 4 : 12), // مسافة أصغر في العرضي
+                    
+                    // 2. Privacy warning banner
+                    IgnorePointer(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(maxHeight: size.height * (isLandscape ? 0.25 : 0.21)),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.topCenter,
+                          child: Container(
+                            width: isLandscape ? size.width * 0.7 : size.width - 20, // عرض أقل في العرضي
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isLandscape ? 8 : 10,
+                              vertical: isLandscape ? 6 : 10,
                             ),
-                            // Disclaimer text
-                            Expanded(
-                              child: Text(
-                                'By proceeding, you acknowledge that your photo will be securely stored and may be accessed by authorized personnel for compliance monitoring, audit requirements, and quality assurance.',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: size.width < 380
-                                      ? 11
-                                      : 12.0, // Reduced max from 12.5 to 12.0
-                                  fontWeight: FontWeight.w500,
-                                  height: 1.35,
-                                  decoration: TextDecoration.none,
-                                  letterSpacing: 0, // Removed letter spacing
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.72),
+                              borderRadius: BorderRadius.circular(isLandscape ? 10 : 14),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // Shield icon
+                                Container(
+                                  margin: EdgeInsets.only(
+                                    top: 2,
+                                    right: isLandscape ? 4 : 8,
+                                  ),
+                                  child: Icon(
+                                    Icons.verified_user_rounded,
+                                    color: const Color(0xFFFFD600),
+                                    size: isLandscape ? 16 : 24,
+                                  ),
                                 ),
-                              ),
+                                // Disclaimer text
+                                Flexible(
+                                  child: Text(
+                                    'By proceeding, you acknowledge that your photo will be securely stored and accessed by authorized personnel for compliance monitoring.',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: isLandscape ? 10 : (size.width < 380 ? 11 : 12.0),
+                                      fontWeight: FontWeight.w500,
+                                      height: 1.2,
+                                      decoration: TextDecoration.none,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
+              );
+            }
           ),
 
         if (c.cameraOpen && c.capturedFile == null)
@@ -433,9 +435,13 @@ class CameraUI extends StatelessWidget {
 
                   if (asset == null) return const SizedBox.shrink();
 
+                  // حساب العرض والارتفاع بشكل متجاوب يناسب الشاشات الكبيرة والصغيرة
+                  final double btnWidth = (size.width * 0.35).clamp(160.0, 300.0);
+                  final double btnHeight = btnWidth / 1.875; // الحفاظ على نسبة العرض للارتفاع
+
                   return Container(
-                    width: 150, // تم تكبير العرض كما طلبت
-                    height: 80,
+                    width: btnWidth,
+                    height: btnHeight,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(16.0),
                       // إضافة ظل قوي قليلاً لإبراز الزر
@@ -457,8 +463,7 @@ class CameraUI extends StatelessWidget {
                           Image.asset(
                             asset,
                             fit: BoxFit.fill,
-                            width: 250,
-                            height: 80,
+                            filterQuality: FilterQuality.high, // يمنع تشوش الصورة عند تمديدها على الشاشات الكبيرة
                           ),
 
                           // 2. طبقة "اللمعة" السحرية (Glossy Effect) فوق الصورة
@@ -467,7 +472,7 @@ class CameraUI extends StatelessWidget {
                             left: 0,
                             right: 0,
                             height:
-                                40, // اللمعة تغطي النصف العلوي فقط لتعطي إيحاء الانعكاس
+                                btnHeight / 2, // اللمعة تغطي النصف العلوي فقط لتعطي إيحاء الانعكاس
                             child: Container(
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
@@ -675,8 +680,10 @@ class _RecognitionBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+
     return Positioned(
-      top: size.height * 0.12 + 56,
+      top: size.height * (isLandscape ? 0.05 : 0.12) + (isLandscape ? 34 : 56),
       left: 16,
       right: 16,
       child: Center(
@@ -685,24 +692,27 @@ class _RecognitionBanner extends StatelessWidget {
           child: Glass(
             blur: 14,
             opacity: .18,
-            radius: 16,
+            radius: isLandscape ? 10 : 16,
             border: true,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: EdgeInsets.symmetric(
+              horizontal: isLandscape ? 10 : 16,
+              vertical: isLandscape ? 6 : 12,
+            ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.badge_rounded, color: Colors.white, size: 20),
-                const SizedBox(width: 8),
+                Icon(Icons.badge_rounded, color: Colors.white, size: isLandscape ? 14 : 20),
+                SizedBox(width: isLandscape ? 4 : 8),
                 Flexible(
                   child: Text(
                     _text(json),
                     softWrap: true,
                     overflow: TextOverflow.fade,
-                    style: const TextStyle(
-                      color: Color(0xffd9ffe9),
+                    style: TextStyle(
+                      color: const Color(0xffd9ffe9),
                       decoration: TextDecoration.none,
                       fontWeight: FontWeight.w800,
-                      fontSize: 14.5,
+                      fontSize: isLandscape ? 12 : 14.5,
                       letterSpacing: .2,
                     ),
                   ),
@@ -728,10 +738,11 @@ class AttendanceBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
     final isOk = json['status'] == 'ok';
 
     return Positioned(
-      top: size.height * 0.12 + 112, // أسفل Liveness + Recognition
+      top: size.height * (isLandscape ? 0.05 : 0.12) + (isLandscape ? 68 : 112),
       left: 16,
       right: 16,
       child: Center(
@@ -740,9 +751,12 @@ class AttendanceBanner extends StatelessWidget {
           child: Glass(
             blur: 14,
             opacity: .18,
-            radius: 16,
+            radius: isLandscape ? 10 : 16,
             border: true,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: EdgeInsets.symmetric(
+              horizontal: isLandscape ? 10 : 16,
+              vertical: isLandscape ? 6 : 12,
+            ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -754,24 +768,24 @@ class AttendanceBanner extends StatelessWidget {
                       if (checkType == 'checkin') {
                         return Image.asset(
                           'assets/icon/enter.png',
-                          width: 28,
-                          height: 28,
+                          width: isLandscape ? 20 : 28,
+                          height: isLandscape ? 20 : 28,
                         );
                       } else if (checkType == 'checkout') {
                         return Image.asset(
                           'assets/icon/exit.png',
-                          width: 28,
-                          height: 28,
+                          width: isLandscape ? 20 : 28,
+                          height: isLandscape ? 20 : 28,
                         );
                       }
-                      return const Icon(
+                      return Icon(
                         Icons.how_to_reg_rounded,
-                        color: Color(0xff0fd86e),
-                        size: 20,
+                        color: const Color(0xff0fd86e),
+                        size: isLandscape ? 16 : 20,
                       );
                     },
                   ),
-                  const SizedBox(width: 10),
+                  SizedBox(width: isLandscape ? 6 : 10),
                 ],
                 Flexible(
                   child: Text(
@@ -783,7 +797,7 @@ class AttendanceBanner extends StatelessWidget {
                           ? const Color(0xffd9ffe9)
                           : const Color(0xffffe2e8),
                       fontWeight: FontWeight.w800,
-                      fontSize: 14.5,
+                      fontSize: isLandscape ? 12 : 14.5,
                       height: 1.4,
                       letterSpacing: .2,
                       decoration: TextDecoration.none,

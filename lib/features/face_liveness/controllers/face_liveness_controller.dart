@@ -178,6 +178,9 @@ class FaceLivenessController extends ChangeNotifier
   DateTime get now => _now;
   Timer? _nowTicker;
 
+  Offset _screensaverOffset = Offset.zero;
+  Offset get screensaverOffset => _screensaverOffset;
+
   // Layout-dependent
   Size _screenSize = Size.zero;
   set screenSize(Size s) => _screenSize = s;
@@ -244,8 +247,17 @@ class FaceLivenessController extends ChangeNotifier
     _resetInactivity();
     _nowTicker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_showScreensaver) {
-        _now = DateTime.now();
-        notifyListeners();
+        final nowTime = DateTime.now();
+        if (nowTime.minute != _now.minute) {
+          _now = nowTime;
+          // Burn-in protection: calculate a small pixel offset using the minute
+          final angle = (nowTime.minute * 6.0) * (math.pi / 180.0); // 6 degrees per minute
+          _screensaverOffset = Offset(
+            math.sin(angle) * 10.0, // shifts X between -10 and +10 pixels
+            math.cos(angle) * 10.0, // shifts Y between -10 and +10 pixels
+          );
+          notifyListeners();
+        }
       }
     });
     await _loadAppVersion();
@@ -353,7 +365,7 @@ class FaceLivenessController extends ChangeNotifier
       imageFormatGroup: ImageFormatGroup.nv21,
     );
     await _controller!.initialize();
-    await _controller!.lockCaptureOrientation(DeviceOrientation.portraitUp);
+    // await _controller!.lockCaptureOrientation(DeviceOrientation.portraitUp); // Removed to support landscape
 
     // ✅ خزّن حجم الإطار الأخير
     _latestImageSize = Size(
@@ -409,6 +421,12 @@ class FaceLivenessController extends ChangeNotifier
       }
       _showScreensaver = true;
       _cameraOpen = false;
+      _now = DateTime.now();
+      final angle = (_now.minute * 6.0) * (math.pi / 180.0);
+      _screensaverOffset = Offset(
+        math.sin(angle) * 10.0,
+        math.cos(angle) * 10.0,
+      );
       notifyListeners();
       await _disposeCamera();
     });
@@ -652,8 +670,9 @@ class FaceLivenessController extends ChangeNotifier
       return false;
     }
 
-    final srcW = imageRawSize.height; // portrait width
-    final srcH = imageRawSize.width; // portrait height
+    final isLandscape = screenSize.width > screenSize.height;
+    final srcW = isLandscape ? imageRawSize.width : imageRawSize.height;
+    final srcH = isLandscape ? imageRawSize.height : imageRawSize.width;
     final scale = math.max(screenSize.width / srcW, screenSize.height / srcH);
     final dxPad = (screenSize.width - srcW * scale) / 2.0;
     final dyPad = (screenSize.height - srcH * scale) / 2.0;
@@ -666,10 +685,14 @@ class FaceLivenessController extends ChangeNotifier
       cx = 2 * midX - cx;
     }
 
+
+    final shortSide = isLandscape ? screenSize.height : screenSize.width;
+    final longSide = isLandscape ? screenSize.width : screenSize.height;
+
     final ovalCx = screenSize.width * (0.5 + kOvalCxOffsetPct);
     final ovalCy = screenSize.height * (0.5 + kOvalCyOffsetPct);
-    final ovalRx = (screenSize.width * kOvalRxPct);
-    final ovalRy = (screenSize.height * kOvalRyPct);
+    final ovalRx = (isLandscape ? shortSide : screenSize.width) * kOvalRxPct;
+    final ovalRy = (isLandscape ? longSide : screenSize.height) * kOvalRyPct;
 
     final offXpx = cx - ovalCx;
     final offYpx = cy - ovalCy;
@@ -698,8 +721,9 @@ class FaceLivenessController extends ChangeNotifier
   }) {
     if (screenSize == Size.zero) return false;
 
-    final srcW = imageRawSize.height;
-    final srcH = imageRawSize.width;
+    final isLandscape = screenSize.width > screenSize.height;
+    final srcW = isLandscape ? imageRawSize.width : imageRawSize.height;
+    final srcH = isLandscape ? imageRawSize.height : imageRawSize.width;
     final scale = math.max(screenSize.width / srcW, screenSize.height / srcH);
     final dx = (screenSize.width - srcW * scale) / 2.0;
     final dy = (screenSize.height - srcH * scale) / 2.0;
@@ -714,10 +738,14 @@ class FaceLivenessController extends ChangeNotifier
       faceRect.bottomRight,
     ];
 
+
+    final shortSide = isLandscape ? screenSize.height : screenSize.width;
+    final longSide = isLandscape ? screenSize.width : screenSize.height;
+
     final ovalCx = screenSize.width * (0.5 + kOvalCxOffsetPct);
     final ovalCy = screenSize.height * (0.5 + kOvalCyOffsetPct);
-    final ovalRx = (screenSize.width * kOvalRxPct);
-    final ovalRy = (screenSize.height * kOvalRyPct);
+    final ovalRx = (isLandscape ? shortSide : screenSize.width) * kOvalRxPct;
+    final ovalRy = (isLandscape ? longSide : screenSize.height) * kOvalRyPct;
 
     int insideCount = 0;
     for (var point in corners) {
@@ -1021,9 +1049,13 @@ class FaceLivenessController extends ChangeNotifier
   // ===== Helpers =====
   InputImage _toInputImage(CameraImage image) {
     final bytes = _concatenatePlanes(image.planes);
-    final rotation = _rotationIntToImageRotation(
-      _controller?.description.sensorOrientation ?? 0,
-    );
+    
+    // Calculate rotation based on sensor orientation and device orientation
+    final sensorOrientation = _controller?.description.sensorOrientation ?? 0;
+    final deviceOrientation = _controller?.value.deviceOrientation ?? DeviceOrientation.portraitUp;
+    
+    final rotation = _getRotation(sensorOrientation, deviceOrientation);
+    
     final inputFormat = (image.format.group == ImageFormatGroup.nv21)
         ? InputImageFormat.nv21
         : InputImageFormat.yuv420;
@@ -1037,6 +1069,28 @@ class FaceLivenessController extends ChangeNotifier
         bytesPerRow: image.planes.first.bytesPerRow,
       ),
     );
+  }
+
+  InputImageRotation _getRotation(int sensorOrientation, DeviceOrientation deviceOrientation) {
+    int rotationCompensation = 0;
+    if (deviceOrientation == DeviceOrientation.portraitUp) {
+      rotationCompensation = 0;
+    } else if (deviceOrientation == DeviceOrientation.landscapeLeft) {
+      rotationCompensation = 90;
+    } else if (deviceOrientation == DeviceOrientation.portraitDown) {
+      rotationCompensation = 180;
+    } else if (deviceOrientation == DeviceOrientation.landscapeRight) {
+      rotationCompensation = 270;
+    }
+
+    int rotation = (sensorOrientation + rotationCompensation) % 360;
+    
+    // Front camera needs mirroring
+    if (_useFront) {
+      rotation = (360 - rotation) % 360;
+    }
+    
+    return _rotationIntToImageRotation(rotation);
   }
 
   Uint8List _concatenatePlanes(List<Plane> planes) {
@@ -1127,8 +1181,9 @@ class FaceLivenessController extends ChangeNotifier
   }) {
     if (screenSize == Size.zero) return 0.0;
 
-    final srcW = imageRawSize.height; // portrait width
-    final srcH = imageRawSize.width; // portrait height
+    final isLandscape = screenSize.width > screenSize.height;
+    final srcW = isLandscape ? imageRawSize.width : imageRawSize.height;
+    final srcH = isLandscape ? imageRawSize.height : imageRawSize.width;
     final scale = math.max(screenSize.width / srcW, screenSize.height / srcH);
     final dxPad = (screenSize.width - srcW * scale) / 2.0;
     final dyPad = (screenSize.height - srcH * scale) / 2.0;
@@ -1141,10 +1196,13 @@ class FaceLivenessController extends ChangeNotifier
       cx = 2 * midX - cx;
     }
 
+    final shortSide = isLandscape ? screenSize.height : screenSize.width;
+    final longSide = isLandscape ? screenSize.width : screenSize.height;
+
     final ovalCx = screenSize.width * (0.5 + kOvalCxOffsetPct);
     final ovalCy = screenSize.height * (0.5 + kOvalCyOffsetPct);
-    final ovalRx = (screenSize.width * kOvalRxPct);
-    final ovalRy = (screenSize.height * kOvalRyPct);
+    final ovalRx = (isLandscape ? shortSide : screenSize.width) * kOvalRxPct;
+    final ovalRy = (isLandscape ? longSide : screenSize.height) * kOvalRyPct;
 
     final dxn = (cx - ovalCx) / (ovalRx == 0 ? 1 : ovalRx);
     final dyn = (cy - ovalCy) / (ovalRy == 0 ? 1 : ovalRy);
@@ -1292,7 +1350,7 @@ class FaceLivenessController extends ChangeNotifier
       // حالة نادرة: عندنا controller لكن مو مهيأ
       try {
         await _controller!.initialize();
-        await _controller!.lockCaptureOrientation(DeviceOrientation.portraitUp);
+        // await _controller!.lockCaptureOrientation(DeviceOrientation.portraitUp); // Removed to support landscape
         await _startStreamSafely();
       } catch (e) {
         // fallback لو فشل → إعادة init كاملة

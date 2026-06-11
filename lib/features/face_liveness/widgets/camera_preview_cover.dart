@@ -10,15 +10,21 @@ class CameraPreviewCover extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = controller.value.previewSize;
-    if (s == null) return const ColoredBox(color: Colors.black);
-    final portrait = Size(s.height, s.width); // تبديل للأبوبورتريت
+    if (!controller.value.isInitialized) return const ColoredBox(color: Colors.black);
+
+    final previewSize = controller.value.previewSize!;
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+
+    // التأكد من معرفة الضلع الأطول والضلع الأقصر في الكاميرا
+    final double longSide = previewSize.width > previewSize.height ? previewSize.width : previewSize.height;
+    final double shortSide = previewSize.width > previewSize.height ? previewSize.height : previewSize.width;
+
     return ClipRect(
       child: FittedBox(
         fit: BoxFit.cover,
         child: SizedBox(
-          width: portrait.width,
-          height: portrait.height,
+          width: isLandscape ? longSide : shortSide,
+          height: isLandscape ? shortSide : longSide,
           child: CameraPreview(controller),
         ),
       ),

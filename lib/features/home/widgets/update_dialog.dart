@@ -72,6 +72,8 @@ class UpdateDialog extends StatelessWidget {
                 ),
               ),
               SizedBox(height: 12),
+              _UpdateItem(text: 'General fixes and improvements.'),
+              SizedBox(height: 12),
               _UpdateItem(
                 text:
                     'Security Enhancement: Password verification is now required for Logout and Clear Cache actions in the Home Screen.',
