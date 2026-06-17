@@ -14,15 +14,17 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:my_app/core/network_helper.dart';
 import 'package:my_app/features/attendance/attendance_service.dart';
 
 // 1) التقط الصورة واعرضها فورًا
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:my_app/core/datetime_setting_helper.dart';
 
 import '../constants.dart';
 import '../services/network_service.dart';
+import '../services/sync_service.dart';
 
 class FaceLivenessController extends ChangeNotifier
     with WidgetsBindingObserver {
@@ -50,6 +52,17 @@ class FaceLivenessController extends ChangeNotifier
 
   Map<String, dynamic>? _attendanceResult;
   Map<String, dynamic>? get attendanceResult => _attendanceResult;
+
+  bool _isTimeAutomatic = true;
+  bool get isTimeAutomatic => _isTimeAutomatic;
+
+  Future<void> checkTimeSetting() async {
+    final bool auto = await DateTimeSettingHelper.isAutomaticTimeEnabled();
+    if (auto != _isTimeAutomatic) {
+      _isTimeAutomatic = auto;
+      notifyListeners();
+    }
+  }
 
   // ===== Camera =====
   CameraController? _controller;
@@ -243,6 +256,7 @@ class FaceLivenessController extends ChangeNotifier
   // ===== Lifecycle =====
   Future<void> init() async {
     WidgetsBinding.instance.addObserver(this);
+    await checkTimeSetting();
     _initDetector();
     _resetInactivity();
     _nowTicker = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -251,7 +265,9 @@ class FaceLivenessController extends ChangeNotifier
         if (nowTime.minute != _now.minute) {
           _now = nowTime;
           // Burn-in protection: calculate a small pixel offset using the minute
-          final angle = (nowTime.minute * 6.0) * (math.pi / 180.0); // 6 degrees per minute
+          final angle =
+              (nowTime.minute * 6.0) *
+              (math.pi / 180.0); // 6 degrees per minute
           _screensaverOffset = Offset(
             math.sin(angle) * 10.0, // shifts X between -10 and +10 pixels
             math.cos(angle) * 10.0, // shifts Y between -10 and +10 pixels
@@ -285,12 +301,20 @@ class FaceLivenessController extends ChangeNotifier
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
-    if (_controller == null) return;
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused) {
       await _stopStreamSafely();
     } else if (state == AppLifecycleState.resumed) {
-      if (!_showScreensaver) await _startStreamSafely();
+      await checkTimeSetting();
+      if (_isTimeAutomatic) {
+        if (_controller == null) {
+          await _initCamera();
+        } else {
+          if (!_showScreensaver) await _startStreamSafely();
+        }
+      } else {
+        await _disposeCamera();
+      }
     }
   }
 
@@ -333,6 +357,12 @@ class FaceLivenessController extends ChangeNotifier
   }
 
   Future<void> _initCamera() async {
+    if (!_isTimeAutomatic) {
+      debugPrint(
+        '❌ Skipping camera initialization because automatic time is disabled.',
+      );
+      return;
+    }
     // ✅ اجلب الكاميرات مرة واحدة
     _allCams = await availableCameras();
 
@@ -685,7 +715,6 @@ class FaceLivenessController extends ChangeNotifier
       cx = 2 * midX - cx;
     }
 
-
     final shortSide = isLandscape ? screenSize.height : screenSize.width;
     final longSide = isLandscape ? screenSize.width : screenSize.height;
 
@@ -737,7 +766,6 @@ class FaceLivenessController extends ChangeNotifier
       faceRect.bottomLeft,
       faceRect.bottomRight,
     ];
-
 
     final shortSide = isLandscape ? screenSize.height : screenSize.width;
     final longSide = isLandscape ? screenSize.width : screenSize.height;
@@ -966,17 +994,41 @@ class FaceLivenessController extends ChangeNotifier
       _waitMessage = '';
       notifyListeners();
 
+      // التحقق من الإنترنت لدعم الوضع دون اتصال (Offline-First)
+      final connectivityResult = await Connectivity().checkConnectivity();
+      bool isOffline = false;
+      if (connectivityResult is List) {
+        isOffline = connectivityResult.contains(ConnectivityResult.none);
+      } else {
+        isOffline = connectivityResult == ConnectivityResult.none;
+      }
+
+      if (isOffline) {
+        // لا يوجد إنترنت، تخزين الصورة وإشعار المستخدم
+        await SyncService.instance.enqueueRequest(ovalFile.path);
+
+        _faceRecognitionResult = {
+          'isOffline': true,
+          'message':
+              'تم حفظ العملية بنجاح وسيتم رفعها تلقائياً عند توفر الإنترنت',
+        };
+        _attendanceResult = {
+          'status': 'ok',
+          'message':
+              'تم حفظ العملية بنجاح وسيتم رفعها تلقائياً عند توفر الإنترنت',
+        };
+
+        _waiting = false;
+        _processingDone = true;
+        notifyListeners();
+        await _startDisplayAndResume(seq: seq);
+        return;
+      }
+
       // إرسال المهام (liveness + recognition)
       final futures = <Future<void>>[];
 
       if (kEnableLiveness) {
-        final connected = await NetworkHelper.checkAndToastConnection();
-        if (!connected) {
-          _livenessResult = {'error': 'Check Your Internet Connection'};
-          _waiting = false;
-          notifyListeners();
-          return;
-        }
         futures.add(
           _net
               .sendLiveness(ovalFile.path)
@@ -995,12 +1047,10 @@ class FaceLivenessController extends ChangeNotifier
 
       await Future.wait(futures);
       if (kEnableFaceRecognition &&
-          _livenessResult != null &&
-          _livenessResult?['status'] == 'ok' &&
-          _livenessResult?['result']?['liveness'] == true) {
-        final connected = await NetworkHelper.checkAndToastConnection();
-        if (!connected) return;
-
+          (!kEnableLiveness ||
+              (_livenessResult != null &&
+                  _livenessResult?['status'] == 'ok' &&
+                  _livenessResult?['result']?['liveness'] == true))) {
         futures.add(
           _net
               .sendFaceRecognition(ovalFile.path)
@@ -1049,13 +1099,14 @@ class FaceLivenessController extends ChangeNotifier
   // ===== Helpers =====
   InputImage _toInputImage(CameraImage image) {
     final bytes = _concatenatePlanes(image.planes);
-    
+
     // Calculate rotation based on sensor orientation and device orientation
     final sensorOrientation = _controller?.description.sensorOrientation ?? 0;
-    final deviceOrientation = _controller?.value.deviceOrientation ?? DeviceOrientation.portraitUp;
-    
+    final deviceOrientation =
+        _controller?.value.deviceOrientation ?? DeviceOrientation.portraitUp;
+
     final rotation = _getRotation(sensorOrientation, deviceOrientation);
-    
+
     final inputFormat = (image.format.group == ImageFormatGroup.nv21)
         ? InputImageFormat.nv21
         : InputImageFormat.yuv420;
@@ -1071,7 +1122,10 @@ class FaceLivenessController extends ChangeNotifier
     );
   }
 
-  InputImageRotation _getRotation(int sensorOrientation, DeviceOrientation deviceOrientation) {
+  InputImageRotation _getRotation(
+    int sensorOrientation,
+    DeviceOrientation deviceOrientation,
+  ) {
     int rotationCompensation = 0;
     if (deviceOrientation == DeviceOrientation.portraitUp) {
       rotationCompensation = 0;
@@ -1084,12 +1138,12 @@ class FaceLivenessController extends ChangeNotifier
     }
 
     int rotation = (sensorOrientation + rotationCompensation) % 360;
-    
+
     // Front camera needs mirroring
     if (_useFront) {
       rotation = (360 - rotation) % 360;
     }
-    
+
     return _rotationIntToImageRotation(rotation);
   }
 

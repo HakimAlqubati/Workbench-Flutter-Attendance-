@@ -41,8 +41,8 @@ class _LoginScreenState extends State<LoginScreen> {
     // فقط أثناء التطوير، املأ الحقول افتراضيًا
     assert(() {
       // _emailCtrl.text = 'staff@admin.com';
-      // _emailCtrl.text = 'atthq@gmail.com';
-      _emailCtrl.text = 'hq@att.com';
+      _emailCtrl.text = 'atthq@gmail.com';
+      // _emailCtrl.text = 'hq@att.com';
       _passCtrl.text = '123456';
       return true;
     }());

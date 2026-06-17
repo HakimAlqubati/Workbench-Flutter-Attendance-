@@ -72,6 +72,11 @@ class UpdateDialog extends StatelessWidget {
                 ),
               ),
               SizedBox(height: 12),
+              _UpdateItem(
+                text:
+                    'Offline Attendance Support: Register attendance using face recognition offline. Pending records will synchronize automatically when connection is restored or in the background.',
+              ),
+              SizedBox(height: 8),
               _UpdateItem(text: 'General fixes and improvements.'),
               SizedBox(height: 12),
               _UpdateItem(
