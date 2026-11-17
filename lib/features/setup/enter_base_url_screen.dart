@@ -19,6 +19,12 @@ class _EnterBaseUrlScreenState extends State<EnterBaseUrlScreen> {
   final _controller = TextEditingController();
   UrlInputMode _inputMode = UrlInputMode.tenant;
 
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
   String _buildFinalUrl(String input) {
     var trimmed = input.trim();
     if (_inputMode == UrlInputMode.fullUrl) {
@@ -27,7 +33,13 @@ class _EnterBaseUrlScreenState extends State<EnterBaseUrlScreen> {
       }
       return trimmed;
     } else {
-      final t = trimmed.toLowerCase();
+      var t = trimmed.toLowerCase();
+      if (t.startsWith('https://')) t = t.substring(8);
+      if (t.startsWith('http://')) t = t.substring(7);
+      if (t.endsWith('.nltworkbench.com')) {
+        t = t.substring(0, t.length - '.nltworkbench.com'.length);
+      }
+      t = t.replaceAll('/', '');
       return 'https://$t.nltworkbench.com';
     }
   }
@@ -41,7 +53,13 @@ class _EnterBaseUrlScreenState extends State<EnterBaseUrlScreen> {
     }
     if (_inputMode == UrlInputMode.tenant) {
       if (s.contains(' ')) return 'Tenant name cannot contain spaces';
-      if (s.contains('/') || s.contains('.')) {
+      var clean = s.toLowerCase();
+      if (clean.startsWith('https://')) clean = clean.substring(8);
+      if (clean.startsWith('http://')) clean = clean.substring(7);
+      if (clean.endsWith('.nltworkbench.com')) {
+        clean = clean.substring(0, clean.length - '.nltworkbench.com'.length);
+      }
+      if (clean.contains('/') || clean.contains('.')) {
         return 'Please enter only the tenant name (no dots or slashes)';
       }
     } else {
@@ -68,117 +86,120 @@ class _EnterBaseUrlScreenState extends State<EnterBaseUrlScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Workspace Setup',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    _inputMode == UrlInputMode.tenant
-                        ? 'Enter your workspace tenant name below.'
-                        : 'Enter your custom workspace URL below.',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: Colors.blueGrey,
-                      fontWeight: FontWeight.w500,
+        child: SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Workspace Setup',
+                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+                      textAlign: TextAlign.center,
                     ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 24),
-                  SegmentedButton<UrlInputMode>(
-                    segments: const [
-                      ButtonSegment<UrlInputMode>(
-                        value: UrlInputMode.tenant,
-                        label: Text('Tenant Name'),
-                        icon: Icon(Icons.domain),
+                    const SizedBox(height: 12),
+                    Text(
+                      _inputMode == UrlInputMode.tenant
+                          ? 'Enter your workspace tenant name below.'
+                          : 'Enter your custom workspace URL below.',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: Colors.blueGrey,
+                        fontWeight: FontWeight.w500,
                       ),
-                      ButtonSegment<UrlInputMode>(
-                        value: UrlInputMode.fullUrl,
-                        label: Text('Full URL'),
-                        icon: Icon(Icons.link),
-                      ),
-                    ],
-                    selected: {_inputMode},
-                    onSelectionChanged: (Set<UrlInputMode> newSelection) {
-                      setState(() {
-                        _inputMode = newSelection.first;
-                        _controller.clear();
-                        _formKey.currentState?.reset();
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 28),
-                  TextFormField(
-                    controller: _controller,
-                    keyboardType: TextInputType.text,
-                    textAlign: TextAlign.start,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 1.2,
+                      textAlign: TextAlign.center,
                     ),
-                    decoration: InputDecoration(
-                      labelText: _inputMode == UrlInputMode.tenant
-                          ? 'Tenant Name'
-                          : 'Custom Workspace URL',
-                      hintText: _inputMode == UrlInputMode.tenant
-                          ? 'tenant'
-                          : 'https://example.com',
-                      prefixText: _inputMode == UrlInputMode.tenant ? 'https://' : null,
-                      suffixText: _inputMode == UrlInputMode.tenant ? '.nltworkbench.com' : null,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      prefixIcon: Icon(
-                        _inputMode == UrlInputMode.tenant
-                            ? Icons.domain
-                            : Icons.link,
-                      ),
-                    ),
-                    validator: _validate,
-                    onFieldSubmitted: (_) => _save(),
-                  ),
-                  const SizedBox(height: 32),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: _save,
-                      style: ElevatedButton.styleFrom(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                    const SizedBox(height: 24),
+                    SegmentedButton<UrlInputMode>(
+                      segments: const [
+                        ButtonSegment<UrlInputMode>(
+                          value: UrlInputMode.tenant,
+                          label: Text('Tenant Name'),
+                          icon: Icon(Icons.domain),
                         ),
-                      ),
-                      child: const Text(
-                        'Save and Continue',
-                        style: TextStyle(fontSize: 16),
-                      ),
-                    ),
-                  ),
-                  if (kDebugMode) ...[
-                    const SizedBox(height: 16),
-                    TextButton.icon(
-                      onPressed: () {
+                        ButtonSegment<UrlInputMode>(
+                          value: UrlInputMode.fullUrl,
+                          label: Text('Full URL'),
+                          icon: Icon(Icons.link),
+                        ),
+                      ],
+                      selected: {_inputMode},
+                      onSelectionChanged: (Set<UrlInputMode> newSelection) {
                         setState(() {
-                          _inputMode = UrlInputMode.fullUrl;
-                          _controller.text = 'https://workbenchro.ressystem.com/';
+                          _inputMode = newSelection.first;
+                          _controller.clear();
+                          _formKey.currentState?.reset();
                         });
                       },
-                      icon: const Icon(Icons.bug_report),
-                      label: const Text('Autofill Debug URL'),
                     ),
+                    const SizedBox(height: 28),
+                    TextFormField(
+                      key: ValueKey(_inputMode),
+                      controller: _controller,
+                      keyboardType: TextInputType.text,
+                      textDirection: TextDirection.ltr,
+                      textAlign: TextAlign.start,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.normal,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: _inputMode == UrlInputMode.tenant
+                            ? 'Tenant Name'
+                            : 'Custom Workspace URL',
+                        hintText: _inputMode == UrlInputMode.tenant
+                            ? 'e.g. acme'
+                            : 'https://example.com',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        prefixIcon: Icon(
+                          _inputMode == UrlInputMode.tenant
+                              ? Icons.domain
+                              : Icons.link,
+                        ),
+                      ),
+                      validator: _validate,
+                      onFieldSubmitted: (_) => _save(),
+                    ),
+                    const SizedBox(height: 32),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        onPressed: _save,
+                        style: ElevatedButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'Save and Continue',
+                          style: TextStyle(fontSize: 16),
+                        ),
+                      ),
+                    ),
+                    if (kDebugMode) ...[
+                      const SizedBox(height: 16),
+                      TextButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            _inputMode = UrlInputMode.fullUrl;
+                            _controller.text = 'https://workbenchro.ressystem.com/';
+                          });
+                        },
+                        icon: const Icon(Icons.bug_report),
+                        label: const Text('Autofill Debug URL'),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),
@@ -187,4 +208,3 @@ class _EnterBaseUrlScreenState extends State<EnterBaseUrlScreen> {
     );
   }
 }
-
