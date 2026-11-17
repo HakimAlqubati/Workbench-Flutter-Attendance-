@@ -10,6 +10,7 @@ late String kApiBaseUrl; // تُعيَّن في الإقلاع قبل استعم
 
 String get kFaceRecognitionApiUrl => "$kApiBaseUrl/api/hr/identifyEmployee";
 String get kAttendanceApiUrl      => "$kApiBaseUrl/api/v2/attendance/test";
+String get kLivenessApiUrl        => "$kApiBaseUrl/api/hr/liveness";
 
 // (اختياري) دالة موحّدة:
 String api(String path) => "$kApiBaseUrl$path";
