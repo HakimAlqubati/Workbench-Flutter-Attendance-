@@ -19,12 +19,11 @@ import 'package:my_app/features/attendance/attendance_service.dart';
 // 1) التقط الصورة واعرضها فورًا
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
-import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:my_app/core/network_helper.dart';
 import 'package:my_app/core/datetime_setting_helper.dart';
 
 import '../constants.dart';
 import '../services/network_service.dart';
-import '../services/sync_service.dart';
 
 class FaceLivenessController extends ChangeNotifier
     with WidgetsBindingObserver {
@@ -994,41 +993,17 @@ class FaceLivenessController extends ChangeNotifier
       _waitMessage = '';
       notifyListeners();
 
-      // التحقق من الإنترنت لدعم الوضع دون اتصال (Offline-First)
-      final connectivityResult = await Connectivity().checkConnectivity();
-      bool isOffline = false;
-      if (connectivityResult is List) {
-        isOffline = connectivityResult.contains(ConnectivityResult.none);
-      } else {
-        isOffline = connectivityResult == ConnectivityResult.none;
-      }
-
-      if (isOffline) {
-        // لا يوجد إنترنت، تخزين الصورة وإشعار المستخدم
-        await SyncService.instance.enqueueRequest(ovalFile.path);
-
-        _faceRecognitionResult = {
-          'isOffline': true,
-          'message':
-              'تم حفظ العملية بنجاح وسيتم رفعها تلقائياً عند توفر الإنترنت',
-        };
-        _attendanceResult = {
-          'status': 'ok',
-          'message':
-              'تم حفظ العملية بنجاح وسيتم رفعها تلقائياً عند توفر الإنترنت',
-        };
-
-        _waiting = false;
-        _processingDone = true;
-        notifyListeners();
-        await _startDisplayAndResume(seq: seq);
-        return;
-      }
-
       // إرسال المهام (liveness + recognition)
       final futures = <Future<void>>[];
 
       if (kEnableLiveness) {
+        final connected = await NetworkHelper.checkAndToastConnection();
+        if (!connected) {
+          _livenessResult = {'error': 'Check Your Internet Connection'};
+          _waiting = false;
+          notifyListeners();
+          return;
+        }
         futures.add(
           _net
               .sendLiveness(ovalFile.path)
@@ -1051,6 +1026,9 @@ class FaceLivenessController extends ChangeNotifier
               (_livenessResult != null &&
                   _livenessResult?['status'] == 'ok' &&
                   _livenessResult?['result']?['liveness'] == true))) {
+        final connected = await NetworkHelper.checkAndToastConnection();
+        if (!connected) return;
+
         futures.add(
           _net
               .sendFaceRecognition(ovalFile.path)

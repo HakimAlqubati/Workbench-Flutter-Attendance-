@@ -1,10 +1,8 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:camera/camera.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
 
 import '../services/network_service.dart';
-import '../services/sync_service.dart';
 
 class FaceRecognitionController extends ChangeNotifier {
   final LivenessNetworkService _net = LivenessNetworkService();
@@ -34,27 +32,8 @@ class FaceRecognitionController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // فحص حالة الاتصال بالإنترنت
-      final connectivityResult = await Connectivity().checkConnectivity();
-      bool isOffline = false;
-      if (connectivityResult is List) {
-        isOffline = connectivityResult.contains(ConnectivityResult.none);
-      } else {
-        isOffline = connectivityResult == ConnectivityResult.none;
-      }
-
-      if (isOffline) {
-        // لا يوجد إنترنت، تخزين محلي
-        await SyncService.instance.enqueueRequest(imagePath);
-        _result = {
-          'isOffline': true,
-          'message': 'تم حفظ العملية بنجاح وسيتم رفعها تلقائياً عند توفر الإنترنت',
-        };
-      } else {
-        // إرسال مباشر
-        final json = await _net.sendFaceRecognition(imagePath);
-        _result = json ?? {'error': 'Invalid response'};
-      }
+      final json = await _net.sendFaceRecognition(imagePath);
+      _result = json ?? {'error': 'Invalid response'};
     } catch (e) {
       _error = 'Recognition error: $e';
     } finally {

@@ -8,8 +8,6 @@ import 'widgets/big_action_button.dart';
 import 'widgets/update_dialog.dart';
 import 'widgets/credential_verification_dialog.dart';
 import '../../widgets/clear_cache_dialog.dart';
-import 'package:my_app/core/database/sync_database.dart';
-import 'views/failed_logs_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -121,58 +119,6 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text("Face Liveness"),
         centerTitle: true,
         actions: [
-          ValueListenableBuilder<int>(
-            valueListenable: SyncDatabase.failedLogsCount,
-            builder: (context, count, _) {
-              return Stack(
-                alignment: Alignment.center,
-                children: [
-                  IconButton(
-                    icon: Icon(
-                      count > 0
-                          ? Icons.notifications_active_rounded
-                          : Icons.notifications_none_rounded,
-                      color: count > 0 ? Colors.amberAccent : Colors.white,
-                    ),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const FailedLogsScreen(),
-                        ),
-                      );
-                    },
-                    tooltip: 'سجل الأخطاء | Error Log',
-                  ),
-                  if (count > 0)
-                    Positioned(
-                      right: 8,
-                      top: 8,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
-                          color: Colors.redAccent,
-                          shape: BoxShape.circle,
-                        ),
-                        constraints: const BoxConstraints(
-                          minWidth: 16,
-                          minHeight: 16,
-                        ),
-                        child: Text(
-                          '$count',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
           IconButton(
             icon: const Icon(Icons.delete_outline), // Trash icon
             onPressed: () => _clearCache(context),
